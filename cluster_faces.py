@@ -4,6 +4,8 @@ import numpy as np
 import argparse
 import pickle
 import cv2
+import matplotlib.pyplot as plt
+import os
 
 # construct the argument parser
 ap = argparse.ArgumentParser()
@@ -11,6 +13,10 @@ ap.add_argument("-e","--encodings", required=True,
 	help="path to serialized db of facial encodings")
 ap.add_argument("-j","--jobs",type=int, default=1,
 	help="# of parallel jobs to run (-1 will use all CPUs)")
+ap.add_argument("-p", "--eps", type=float, default=0.5,
+	help="eps of DBSCAN, too big -> one class, too small -> many class")
+ap.add_argument("-m", "--min_samples", type=int, default=5,
+    help="min samples of DBSCAN")
 args = vars(ap.parse_args())
 
 # load the serialized face encodings + bounding box locations from
@@ -19,19 +25,35 @@ args = vars(ap.parse_args())
 print("[INFO] loading encodings...")
 data = pickle.loads(open(args["encodings"],"rb").read())
 data = np.array(data)
-encodings = [d["encoding"] for d in data]
+encodings = np.array([d["encoding"] for d in data])
+
+print(encodings.shape)
+#print(encodings[0])
+#print(type(encodings))
 
 # cluster the embeddings
 print("[INFO] clustering...")
-clt = DBSCAN(metric="euclidean", n_jobs=args["jobs"])
+clt = DBSCAN(metric="euclidean", n_jobs=args["jobs"], eps=args["eps"], min_samples=args["min_samples"])
 clt.fit(encodings)
+
+plt.scatter(encodings[:, 4], encodings[:, 9], marker='o', c=clt.labels_)
+plt.show()
 
 # determine the total number of unique faces found in the dataset
 labelIDs = np.unique(clt.labels_)
 numUniqueFaces = len(np.where(labelIDs > -1)[0])
 print("[INFO] # unique faces : {}".format(numUniqueFaces))
 
+# remove old pic
+for num in range(0, 20):
+	filename = 'out_%d.jpg' % num
+	if os.path.exists(filename):
+		os.remove(filename)
+		print('file %s deleted' % filename)
+	
+
 # loop over the unique face integers
+face_id = 0
 for labelID in labelIDs:
 	# find all the indexes into the 'data' array that belong to the
 	# current label ID, then randomly sample a maximum of 25 index from the set
@@ -60,6 +82,8 @@ for labelID in labelIDs:
 	# show the output montage
 	title = "Face ID #{}".format(labelID)
 	title = "Unknown Faces" if labelID == -1 else title
-	cv2.imshow(title, montage)
-	cv2.waitKey(0)
+	#cv2.imshow(title, montage)
+	#cv2.waitKey(0)
+	cv2.imwrite('out_{}.jpg'.format(face_id), montage)
+	face_id += 1
 

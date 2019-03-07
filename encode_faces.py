@@ -27,6 +27,11 @@ for (i, imagePath) in enumerate(imagePaths):
 	print("[INFO] processing image {}/{}".format(i+1, len(imagePaths)))
 	print(imagePath)
 	image = cv2.imread(imagePath)
+	try:
+		image.shape
+	except:
+		print('failed to read img file: %s' % (imagePath))
+		continue
 	rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 	
 	# detect the (x,y) coordinates of the bounding boxes

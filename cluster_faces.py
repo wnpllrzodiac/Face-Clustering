@@ -24,8 +24,10 @@ args = vars(ap.parse_args())
 
 print("[INFO] loading encodings...")
 data = pickle.loads(open(args["encodings"],"rb").read())
+print("[INFO] loaded total face count: %d" % len(data))
 data = np.array(data)
 encodings = np.array([d["encoding"] for d in data])
+#np.random.shuffle(encodings)
 
 print(encodings.shape)
 #print(encodings[0])
@@ -54,11 +56,14 @@ for num in range(0, 20):
 
 # loop over the unique face integers
 face_id = 0
+cluster_face_count = 0
 for labelID in labelIDs:
 	# find all the indexes into the 'data' array that belong to the
 	# current label ID, then randomly sample a maximum of 25 index from the set
 	print("[INFO] faces for face ID: {}".format(labelID))
 	idxs = np.where(clt.labels_ == labelID)[0]
+	print("[INFO] face count: %d, cluster count %d" % (len(idxs), cluster_face_count))
+	cluster_face_count = cluster_face_count + len(idxs)
 	idxs = np.random.choice(idxs, size=min(25, len(idxs)),
 		replace=False)
 
@@ -87,3 +92,4 @@ for labelID in labelIDs:
 	cv2.imwrite('out_{}.jpg'.format(face_id), montage)
 	face_id += 1
 
+print("[INFO] total cluster_face_count %d" % cluster_face_count)

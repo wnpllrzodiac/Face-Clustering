@@ -4,6 +4,7 @@ import argparse
 import pickle
 import cv2
 import os
+import random
 
 # construct argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -21,10 +22,18 @@ imagePaths = list(paths.list_images(args["dataset"]))
 data = []
 
 # loop over image paths
+paths = []
 for (i, imagePath) in enumerate(imagePaths):
 	# load input image and convert it from RGB (OpenCV ordering)
 	# to dlib ordering (RGB)
-	print("[INFO] processing image {}/{}".format(i+1, len(imagePaths)))
+	#print("[INFO] processing image {}/{}".format(i+1, len(imagePaths)))
+	#print(imagePath)
+	paths.append(imagePath)
+
+random.shuffle(paths)
+i = 0
+for imagePath in paths:
+	print("[INFO] processing image {}/{}".format(i+1, len(paths)))
 	print(imagePath)
 	image = cv2.imread(imagePath)
 	try:
@@ -47,6 +56,8 @@ for (i, imagePath) in enumerate(imagePaths):
 	d = [{"imagePath": imagePath, "loc": box, "encoding": enc}
 		for (box,enc) in zip(boxes, encodings)]
 	data.extend(d)
+
+	i = i + 1
 
 #dump the facial encodings to disk
 print("[INFO] serializing encodings...")

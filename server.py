@@ -191,8 +191,16 @@ class ImgClusterServer:
         files = []
         i = 0
         start_index = int(page_index) * int(page_size)
-        sql = 'SELECT img_path from clus_img_tb LIMIT %d, %d' % (start_index, int(page_size))
+
+        sql = 'SELECT img_path, width, height from clus_img_tb LIMIT %d, %d' % (start_index, int(page_size))
         
+        message = {
+            'code': -1,
+            'msg': 'error',
+            'cat_id': cat_id,
+            'sql': sql
+        }
+
         # 打开数据库连接
         db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
         
@@ -203,20 +211,16 @@ class ImgClusterServer:
             cursor.execute(sql)
             values = cursor.fetchall()
             for v in values:
-                f = v[0].split('/')[-1]
+                path = v[0]
+                width, height = v[1:] # 192 288
+                f = path.split('/')[-1]
                 download_url = 'http://10.102.25.138:9123/img/%s' % urllib.parse.quote(f)
-                files.append(download_url)
+                files.append({'image': download_url, 'width': 192, 'height': 192 * height / width})
         except Exception as e:
             print('failed to query pic from db: ', e)
+            message['msg'] = e
 
         db.close()
-
-        message = {
-            'code': -1,
-            'msg': 'error',
-            'cat_id': cat_id,
-            'sql': sql
-        }
 
         if len(files):
             message['code']         = 0
@@ -224,7 +228,7 @@ class ImgClusterServer:
             message['page_index']   = int(page_index)
             message['count']        = min(int(page_size), len(files))
             message['more']         = (len(files) == int(page_size))
-            message['pics']         = files
+            message['result']         = files
         else:
             message['error']        = 'no more pic'
 

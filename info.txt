@@ -1,0 +1,8 @@
+proxychains googleimagesdownload --keywords "华表奖2018明星红毯" --limit 100
+
+python3 encode_faces.py --dataset football --encodings encodings_ft.pickle --detection-method hog
+
+python3 cluster_faces.py --encodings encodings_ft.pickle
+
+#she
+python3 cluster_faces.py --encodings encodings_she.pickle -p 0.35 -m 3

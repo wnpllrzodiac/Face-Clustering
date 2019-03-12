@@ -5,6 +5,7 @@ import datetime
 import os
 import cv2
 from imutils import paths
+import face_recognition
 
 def add_pic(db, cursor, imagePath):
     filesize = os.path.getsize(imagePath)
@@ -16,27 +17,81 @@ def add_pic(db, cursor, imagePath):
         print('failed to read img file: %s' % (imagePath))
         return
 
-	#INSERT INTO students (class_id, name, gender, score) VALUES (2, '大牛', 'M', 80)
+    #INSERT INTO students (class_id, name, gender, score) VALUES (2, '大牛', 'M', 80)
+    cat_id = 'test'
     sql = "INSERT INTO clus_img_tb( \
-        cat, img_desc, img_path, width, height, add_time, filesize) \
+        cat_id, img_desc, img_path, width, height, add_time, filesize) \
         VALUES ('%s', '%s',  '%s',  %d,  %d, '%s', %d)" % \
-        ('test', 'nothing', imagePath, image.shape[1], image.shape[0], dt, filesize)
+        (cat_id, 'nothing', imagePath, image.shape[1], image.shape[0], dt, filesize)
 
     try:
-   		# 执行sql语句
+        # 执行sql语句
         cursor.execute(sql)
-  		# 执行sql语句
+        # 执行sql语句
         db.commit()
         print('pic %s added to db.' % imagePath)
+
+        cursor.execute('SELECT id from clus_img_tb WHERE img_path = %s', imagePath)
+        values = cursor.fetchall()
+        img_idx = values[0][0]
+        #print('img_idx: ', img_idx)
+
+        detect_face(db, cursor, imagePath, cat_id, img_idx)
     except Exception as e:
-		# 发生错误时回滚
+		    # 发生错误时回滚
         db.rollback()
-        print(e)
+        print('failed to add img record: ', e)
+
+def save_face(db, cursor, imagePath, cat_id, img_idx, box, feature):
+    bytes_feature = feature.tostring()
+    #print(bytes_feature)
+
+    try:
+      top, right, bottom, left = box
+      cursor.execute('insert into clus_face_tb (cat_id, img_idx, box_left, box_top, box_right, box_bottom, feature) \
+          values (%s, %s, %s, %s, %s, %s, %s)', (cat_id, img_idx, left, top, right, bottom, bytes_feature))
+
+      db.commit()
+
+      #cursor.execute('select feature from clus_face_tb where img_idx = %s' % (123))
+      #values = cursor.fetchall()
+
+      print('face added to db')
+
+      #print(values)
+      #feature = np.frombuffer(values[0][0], dtype=np.float64) #np.float32
+      #print(feature)
+    except Exception as e:
+		    # 发生错误时回滚
+        db.rollback()
+        print('failed to add face record: ', e)
+
+def detect_face(db, cursor, imagePath, cat_id, img_idx):
+    image = cv2.imread(imagePath)
+    try:
+        image.shape
+    except:
+        print('failed to read img file: %s' % (imagePath))
+        return False
+
+    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    # detect the (x,y) coordinates of the bounding boxes
+    # corresponding to each face in the input image
+    boxes = face_recognition.face_locations(rgb, model="HOG")
+    #print(boxes)
+
+    # compute the facial embedding for the face
+    encodings = face_recognition.face_encodings(rgb, boxes)
+    #print(encodings)
+
+    for box,enc in zip(boxes, encodings):
+        save_face(db, cursor, imagePath, cat_id, img_idx, box, enc)
 
 '''
 CREATE TABLE `clus_img_tb` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `cat` varchar(16) DEFAULT NULL COMMENT '图像分类目录',
+  `cat_id` varchar(64) DEFAULT NULL COMMENT '图像分类目录',
   `img_desc` varchar(256) DEFAULT NULL COMMENT '图像描述',
   `img_path` varchar(512) NOT NULL COMMENT '图像路径',
   `width` int(11) DEFAULT NULL COMMENT '图像宽',
@@ -50,15 +105,25 @@ CREATE TABLE `clus_img_tb` (
 '''
 CREATE TABLE `test`.`clus_face_tb` (
   `id` INT NOT NULL AUTO_INCREMENT,
+  `cat_id` varchar(64) DEFAULT NULL
   `img_idx` INT NOT NULL,
   `left` INT NOT NULL,
   `top` INT NOT NULL,
   `right` INT NOT NULL,
   `bottom` INT NOT NULL,
   `feature` BLOB NULL,
+  `cluster_idx` INT,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+'''
 
+'''
+CREATE TABLE `test`.`clus_cluster_tb` (
+  `id` INT NULL AUTO_INCREMENT,
+  `cluster_idx` INT NOT NULL,
+  `name` VARCHAR(64) NULL,
+  `extrainfo` VARCHAR(256) NULL,
+  PRIMARY KEY (`id`));
 '''
 
 # 打开数据库连接
@@ -81,7 +146,7 @@ imagePaths = list(paths.list_images('/media/zodiac/Prog/3g/peoplePhoto'))
 data = []
 
 for (i, imagePath) in enumerate(imagePaths):
-	add_pic(db, cursor, imagePath)
+    add_pic(db, cursor, imagePath)
 
 # 关闭数据库连接
 db.close()

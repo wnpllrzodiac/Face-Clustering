@@ -10,6 +10,15 @@ from imutils import paths
 from imutils import build_montages
 from sklearn.cluster import DBSCAN
 
+def update_cluster(db, cursor, image_index, label_id):
+      try:
+          sql = 'UPDATE clus_face_tb SET cluster_idx = %d WHERE img_idx = %d' % (label_id, image_index)
+          cursor.execute(sql)
+          db.commit()
+      except Exception as e:
+        print('failed to update face data: ', e)
+        db.rollback()
+
 def cluster_faces(db, cursor, cat_id):
     try:
       # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
@@ -72,6 +81,10 @@ def cluster_faces(db, cursor, cat_id):
         idxs = np.where(clt.labels_ == labelID)[0]
         print("[INFO] face count: %d, cluster count %d" % (len(idxs), cluster_face_count))
         cluster_face_count = cluster_face_count + len(idxs)
+        
+        if labelID != -1:
+            [update_cluster(db, cursor, data[idx]["imageIndex"], labelID) for idx in idxs]
+        
         idxs = np.random.choice(idxs, size=min(25, len(idxs)),
           replace=False)
 

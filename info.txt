@@ -6,3 +6,6 @@ python3 cluster_faces.py --encodings encodings_ft.pickle
 
 #she
 python3 cluster_faces.py --encodings encodings_she.pickle -p 0.35 -m 3
+
+add_db.py    -- add record
+clus_face.py -- cluster faces

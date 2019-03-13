@@ -12,6 +12,7 @@ import pymysql
 import uuid
 from imutils import build_montages
 
+server_ip='10.102.25.132'
 upload_folder = '/home/zodiac/work/media/upload_pic'
 
 def repaire_filename(filename):
@@ -131,7 +132,7 @@ class ImgClusterServer:
             myFile length: %s<br />
             myFile filename: %s<br />
             myFile mime-type: %s<br />
-            <img src="http://10.102.25.138:9123/img/%s" with="320" height="240"/>
+            <img src="http://%s:9123/img/%s" with="320" height="240"/>
         </body>
         </html>'''
 
@@ -150,7 +151,7 @@ class ImgClusterServer:
                 to_save.write(data)
                 size += len(data)
 
-        return out % (size, basename, myFile.content_type, urllib.parse.quote(basename))
+        return out % (server_ip, size, basename, myFile.content_type, urllib.parse.quote(basename))
         
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -257,7 +258,7 @@ class ImgClusterServer:
                 path = v[1]
                 top, right, bottom, left = v[2:6]
                 f = path.split('/')[-1]
-                download_url = 'http://10.102.25.138:9123/img/%s' % urllib.parse.quote(f)
+                download_url = 'http://%s:9123/img/%s' % (server_ip, urllib.parse.quote(f))
                 faces.append({
                     'image': download_url, 
                     'top': top, 
@@ -287,7 +288,7 @@ class ImgClusterServer:
             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
         </head>
         <body>
-            <img src="http://10.102.25.138:9123/montage/%s" with="320" height="240"/>
+            <img src="http://%s:9123/montage/%s" with="640" height="480"/>
         </body>
         </html>'''
         pic_name = '{}_{}_{}.jpg'.format(cat_id, cluster_idx, uuid.uuid1())
@@ -330,7 +331,7 @@ class ImgClusterServer:
 
         db.close()
 
-        return out % (pic_name)
+        return out % (server_ip, pic_name)
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -361,7 +362,7 @@ class ImgClusterServer:
                 path = v[0]
                 width, height = v[1:] # 192 288
                 f = path.split('/')[-1]
-                download_url = 'http://10.102.25.138:9123/img/%s' % urllib.parse.quote(f)
+                download_url = 'http://%s:9123/img/%s' % (server_ip, urllib.parse.quote(f))
                 files.append({'image': download_url, 'width': 192, 'height': 192 * height / width})
         except Exception as e:
             print('failed to query pic from db: ', e)

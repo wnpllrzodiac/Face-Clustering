@@ -10,9 +10,10 @@ from imutils import paths
 from imutils import build_montages
 from sklearn.cluster import DBSCAN
 
-def update_cluster(db, cursor, image_index, label_id):
+def update_cluster(db, cursor, face_idx, label_id):
       try:
-          sql = 'UPDATE clus_face_tb SET cluster_idx = %d WHERE img_idx = %d' % (label_id, image_index)
+          sql = 'UPDATE clus_face_tb SET cluster_idx = %d WHERE id = %d' % (label_id, face_idx)
+          print('sql: ', sql)
           cursor.execute(sql)
           db.commit()
       except Exception as e:
@@ -22,7 +23,7 @@ def update_cluster(db, cursor, image_index, label_id):
 def cluster_faces(db, cursor, cat_id):
     try:
       # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
-      cursor.execute('SELECT img_idx, box_top, box_right, box_bottom, box_left, feature, img_path from clus_face_tb \
+      cursor.execute('SELECT clus_face_tb.id, img_idx, box_top, box_right, box_bottom, box_left, feature, img_path from clus_face_tb \
         left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
         WHERE clus_face_tb.cat_id = %s', cat_id)
       values = cursor.fetchall()
@@ -30,14 +31,15 @@ def cluster_faces(db, cursor, cat_id):
       data = []
       for v in values:
           #print(values)
-          img_idx = v[0]
-          top, right, bottom, left = v[1:5]
-          feature = np.frombuffer(v[5], dtype=np.float64)
-          img_path = v[6]
+          face_idx  = v[0]
+          img_idx   = v[1]
+          top, right, bottom, left = v[2:6]
+          feature   = np.frombuffer(v[6], dtype=np.float64)
+          img_path  = v[7]
 
           #print(feature)
           box = (top, right, bottom, left)
-          d = [{"imageIndex": img_idx, "imagePath": img_path, "loc": box, "encoding": feature}]
+          d = [{"faceIndex": face_idx, "imageIndex": img_idx, "imagePath": img_path, "loc": box, "encoding": feature}]
           data.extend(d)
     except Exception as e:
         print('failed to read face data: ', e)
@@ -83,8 +85,8 @@ def cluster_faces(db, cursor, cat_id):
         cluster_face_count = cluster_face_count + len(idxs)
         
         if labelID != -1:
-            [update_cluster(db, cursor, data[idx]["imageIndex"], labelID) for idx in idxs]
-        
+            [update_cluster(db, cursor, data[i]["faceIndex"], labelID) for i in idxs]
+
         idxs = np.random.choice(idxs, size=min(25, len(idxs)),
           replace=False)
 

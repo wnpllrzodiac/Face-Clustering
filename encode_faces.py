@@ -5,6 +5,10 @@ import pickle
 import cv2
 import os
 import random
+import time
+
+def get_msec():
+    return int(time.time() * 1000)
 
 # construct argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -29,6 +33,8 @@ for (i, imagePath) in enumerate(imagePaths):
 	#print("[INFO] processing image {}/{}".format(i+1, len(imagePaths)))
 	#print(imagePath)
 	paths.append(imagePath)
+
+start_time = get_msec()
 
 random.shuffle(paths)
 i = 0
@@ -58,6 +64,9 @@ for imagePath in paths:
 	data.extend(d)
 
 	i = i + 1
+
+elapsed_msec = get_msec() - start_time
+print('used %d msec, fps %.2f' % (elapsed_msec, float(len(paths) * 1000) / float(elapsed_msec)))
 
 #dump the facial encodings to disk
 print("[INFO] serializing encodings...")

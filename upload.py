@@ -5,9 +5,10 @@ import random
 import requests
 import os
 import json
+import sys
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
-folder = 'D:\\3g\\peoplePhoto'
+server_ip='10.102.25.132'
     
 def fix_filename(filename):
     return filename.encode('utf-8').decode('ISO-8859-1', 'replace')
@@ -30,7 +31,7 @@ def upload_file(file):
     
     size = os.path.getsize(file)
     
-    url = 'http://10.102.25.138:9123/upload'
+    url = 'http://{}:9123/upload'.format(server_ip)
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:50.0) Gecko/20100101 Firefox/50.0', 
         'Referer': url 
@@ -51,5 +52,8 @@ def upload_file(file):
 if __name__ == '__main__':
     #file = 'D:\\3g\\peoplePhoto\\【有图】#TYZ# 8P 摄影：JNLeung\\【有图】#TYZ# 8P 摄影：JNLeung_002.jpg'
     #upload_file(file)
-    
-    listDir('/media/zodiac/Prog/3g/peoplePhoto')
+   
+    folder = '/home/suhui/work/media/peoplePhoto'
+    if len(sys.argv) > 1:
+        folder = sys.argv[1]
+    listDir(folder) 

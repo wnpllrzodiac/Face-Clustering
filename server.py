@@ -9,8 +9,10 @@ import cv2
 import face_recognition
 import datetime
 import pymysql
+import uuid
+from imutils import build_montages
 
-upload_folder = '/home/suhui/work/media/upload_pic'
+upload_folder = '/home/zodiac/work/media/upload_pic'
 
 def repaire_filename(filename):
     return filename.encode('ISO-8859-1').decode('utf-8', 'replace')
@@ -187,6 +189,151 @@ class ImgClusterServer:
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
+    def get_cluster_count(self, cat_id='test'):
+        sql = 'SELECT max(cluster_idx) from clus_face_tb where cat_id = "%s"' % (cat_id)
+        
+        message = {
+            'code': -1,
+            'msg': 'error',
+            'cat_id': cat_id,
+            'sql': sql
+        }
+
+        # 打开数据库连接
+        db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+        
+        # 使用 cursor() 方法创建一个游标对象 cursor
+        cursor = db.cursor()
+
+        try:
+            cursor.execute(sql)
+            values = cursor.fetchall()
+            count = values[0][0]
+        except Exception as e:
+            print('failed to get cluster count from db: ', e)
+            message['msg'] = e
+
+        db.close()
+
+        if count and count >= 0:
+            message['code']         = 0
+            message['msg']          = 'ok'
+            message['cluster_count']= count + 1
+        else:
+            message['error']        = 'no cluster face count'
+
+        return message   
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out()
+    def get_cluster_faces(self, cat_id='test', cluster_idx=0):
+        sql = 'SELECT img_idx,img_path,box_top,box_right,box_bottom,box_left from clus_face_tb \
+            left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
+            where clus_face_tb.cluster_idx = %d and clus_face_tb.cat_id = "%s"' \
+                % (int(cluster_idx), cat_id)
+        
+        message = {
+            'code': -1,
+            'msg': 'error',
+            'cat_id': cat_id,
+            'cluster_idx': int(cluster_idx),
+            'sql': sql
+        }
+
+        # 打开数据库连接
+        db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+        
+        # 使用 cursor() 方法创建一个游标对象 cursor
+        cursor = db.cursor()
+
+        faces = []
+
+        try:
+            cursor.execute(sql)
+            values = cursor.fetchall()
+
+            for v in values:
+                idx = v[0]
+                path = v[1]
+                top, right, bottom, left = v[2:6]
+                f = path.split('/')[-1]
+                download_url = 'http://10.102.25.138:9123/img/%s' % urllib.parse.quote(f)
+                faces.append({
+                    'image': download_url, 
+                    'top': top, 
+                    'right': right,
+                    'bottom': bottom,
+                    'left': left
+                })
+        except Exception as e:
+            print('failed to get cluster faces from db: ', e)
+            message['msg'] = e
+
+        db.close()
+
+        if len(faces) > 0:
+            message['code']         = 0
+            message['msg']          = 'ok'
+            message['result']       = faces
+        else:
+            message['error']        = 'no cluster faces'
+
+        return message
+
+    @cherrypy.expose
+    def get_cluster_montage(self, cat_id='test', cluster_idx=0):
+        out = '''<html>
+        <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        </head>
+        <body>
+            <img src="http://10.102.25.138:9123/montage/%s" with="320" height="240"/>
+        </body>
+        </html>'''
+        pic_name = '{}_{}_{}.jpg'.format(cat_id, cluster_idx, uuid.uuid1())
+        
+        sql = 'SELECT img_idx,img_path,box_top,box_right,box_bottom,box_left from clus_face_tb \
+            left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
+            where clus_face_tb.cluster_idx = %d and clus_face_tb.cat_id = "%s"' \
+                % (int(cluster_idx), cat_id)
+
+        # 打开数据库连接
+        db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+        
+        # 使用 cursor() 方法创建一个游标对象 cursor
+        cursor = db.cursor()
+
+        faces = []
+
+        try:
+            cursor.execute(sql)
+            values = cursor.fetchall()
+
+            for v in values:
+                idx = v[0]
+                path = v[1]
+                top, right, bottom, left = v[2:6]
+                
+                image = cv2.imread(path)
+                face = image[top:bottom, left:right]
+
+                # force resize the face ROI to 96x96 and then add it to the
+                # faces montage list
+                face = cv2.resize(face, (96,96))
+                faces.append(face)
+
+            # create a montage using 96x96 "tiles" with 5 rows and 5 columns
+            montage = build_montages(faces, (96,96), (5,5))[0]
+            cv2.imwrite('/tmp/{}'.format(pic_name), montage)
+        except Exception as e:
+            print('failed to get cluster faces from db: ', e)
+
+        db.close()
+
+        return out % (pic_name)
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out()
     def get_pics(self, cat_id='test', page_index = 0, page_size = 10):
         files = []
         i = 0
@@ -254,7 +401,11 @@ if __name__ == '__main__':
         },
         '/img': {
             'tools.staticdir.on': True,
-            'tools.staticdir.dir': '/home/suhui/work/media/upload_pic'
+            'tools.staticdir.dir': upload_folder
+        },
+        '/montage': {
+            'tools.staticdir.on': True,
+            'tools.staticdir.dir': '/tmp'
         }
     }
     cherrypy.quickstart(ImgClusterServer(), '/', conf)

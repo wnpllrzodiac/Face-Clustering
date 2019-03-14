@@ -7,6 +7,20 @@
 </head>
 <body>
     <div id="container"></div>
+    <div id="page-navigation" class="hide clear">
+        <span class="disabled page-navigation-prev" title="上一页">«上一页</span>
+        <a href="?&p=1" data-target="page" data-page="1" class="cur">1</a>
+        <a href="?&p=2" data-target="page" data-page="2">2</a>
+        <a href="?&p=3" data-target="page" data-page="3">3</a>
+        <a href="?&p=4" data-target="page" data-page="4">4</a>
+        <a href="?&p=5" data-target="page" data-page="5">5</a>
+        <a href="?&p=6" data-target="page" data-page="6">6</a>
+        <a href="?&p=7" data-target="page" data-page="7">7</a>
+        <a href="?&p=8" data-target="page" data-page="8">8</a>
+        <a href="?&p=9" data-target="page" data-page="9">9</a>
+        <a href="?&p=10" data-target="page" data-page="10">10</a>
+        <a href="?&p=2" class="page-navigation-next"  data-page="2" title="下一页">下一页»</a>
+    </div><!-- #page-navigation -->
     <script type="text/x-handlebars-template" id="waterfall-tpl">
         {{#result}}
         <div class="item">
@@ -19,15 +33,47 @@
     <script src="js/handlebars.js"></script>
     <script src="js/waterfall.min.js"></script>
     <script>
+        function GetQueryString(name)
+		{
+			var reg = new RegExp("(^|&)"+ name +"=([^&]*)(&|$)");
+			var r = window.location.search.substr(1).match(reg);
+			if (r != null)
+				return  unescape(r[2]);
+				
+			return null;
+		}
+        
+        var cat_id = GetQueryString("cat_id");
+        if (cat_id == null)
+            cat_id = "test";
+            
+        var face_idx = GetQueryString("cluster_idx");
+        if (face_idx == null)
+            face_idx = "0";
+            
         $('#container').waterfall({
             itemCls: 'item',
-            colWidth: 222,
+            colWidth: 480,
             gutterWidth: 15,
             gutterHeight: 15,
+            maxCol: 3,
+            maxPage: 1,
             checkImagesLoaded: false,
+            callbacks: {
+                loadingFinished: function($loading, isBeyondMaxPage) {
+                    if ( !isBeyondMaxPage ) {
+                        $loading.fadeOut();
+                    } else {
+                        $loading.hide();
+                        $('#page-navigation').show();
+                    }
+                }
+            },
             path: function(page) {
-                return '../get_pics?page_index=' + page;
-            }
+                //return '../get_pics?page_index=' + page;
+                return "../get_cluster_faces?cat_id=" + cat_id + "&cluster_idx=" + face_idx;
+            },
+            dataType: 'json'
         });
     </script>
 </body>

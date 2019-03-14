@@ -33,28 +33,38 @@
                 
                 var img = new Image()
                 img.src = image_url;
-                
-                //1. 获取画布
-                var canvas = document.getElementById("myCanvas")
-                //2. 获取画布上下文
-                var ctx = canvas.getContext("2d")
-                
-                $.get("../get_pic_faces?img_id=" + img_id, function(result) {
-                    var faces = result["result"];
-                    var x = 0;
-                    var y = 0;
-                    for (var i=0;i<faces.length;i++){
-                        var face = faces[i];
-                        var top = face["top"];
-                        var right = face["right"];
-                        var bottom = face["bottom"];
-                        var left = face["left"];
+                img.onload = function() {
+                    //1. 获取画布
+                    var canvas = document.getElementById("myCanvas")
+                    //2. 获取画布上下文
+                    var ctx = canvas.getContext("2d")
+                    
+                    $.get("../get_pic_faces?img_id=" + img_id, function(result) {
+                        if (result["code"] == 0) {
+                            var faces = result["result"];
+                            var x = 0;
+                            var y = 0;
+                            for (var i=0;i<faces.length;i++){
+                                var face = faces[i];
+                                var top = face["top"];
+                                var right = face["right"];
+                                var bottom = face["bottom"];
+                                var left = face["left"];
 
-                        console.log("img.onload() face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
-                        ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
-                        x += 128;
-                    }
-                });
+                                console.log("face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
+                                ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
+                                x += 96;
+                                if (x >= 96 * 5) {
+                                    x = 0;
+                                    y += 96;
+                                }
+                            }
+                        }
+                        else {
+                            console.log("no face found");
+                        }
+                    });
+                }
             });
             
         }

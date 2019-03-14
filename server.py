@@ -235,7 +235,7 @@ class ImgClusterServer:
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def get_cluster_faces(self, cat_id='test', cluster_idx=0):
-        sql = 'SELECT img_idx,img_path,box_top,box_right,box_bottom,box_left from clus_face_tb \
+        sql = 'SELECT img_idx,img_path,box_top,box_right,box_bottom,box_left,clus_img_tb.width,clus_img_tb.height from clus_face_tb \
             left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
             where clus_face_tb.cluster_idx = %d and clus_face_tb.cat_id = "%s"' \
                 % (int(cluster_idx), cat_id)
@@ -264,6 +264,7 @@ class ImgClusterServer:
                 idx = v[0]
                 path = v[1]
                 top, right, bottom, left = v[2:6]
+                width, height = v[6:]
                 f = path.split('/')[-1]
                 download_url = 'http://%s:9123/img/%s' % (server_ip, urllib.parse.quote(f))
                 faces.append({
@@ -271,7 +272,9 @@ class ImgClusterServer:
                     'top': top, 
                     'right': right,
                     'bottom': bottom,
-                    'left': left
+                    'left': left,
+                    'width': 480,
+                    'height': int(480 * height / width)
                 })
         except Exception as e:
             print('failed to get cluster faces from db: ', e)
@@ -313,10 +316,11 @@ class ImgClusterServer:
             cursor.execute(sql)
             values = cursor.fetchall()
 
-            path = values[0][1]
-            f = path.split('/')[-1]
-            download_url = 'http://%s:9123/img/%s' % (server_ip, urllib.parse.quote(f))
-                
+            if len(values):
+                path = values[0][1]
+                f = path.split('/')[-1]
+                download_url = 'http://%s:9123/img/%s' % (server_ip, urllib.parse.quote(f))
+                message['image'] = download_url
             for v in values:
                 idx = v[0]
                 top, right, bottom, left = v[2:6]
@@ -334,8 +338,7 @@ class ImgClusterServer:
 
         if len(faces) > 0:
             message['code']         = 0
-            message['msg']          = 'ok'
-            message['image']        = download_url,
+            message['msg']          = 'o.k.'
             message['result']       = faces
         else:
             message['error']        = 'no pic faces'
@@ -462,7 +465,11 @@ class ImgClusterServer:
                 width, height = v[1:] # 192 288
                 f = path.split('/')[-1]
                 download_url = 'http://%s:9123/img/%s' % (server_ip, urllib.parse.quote(f))
-                files.append({'image': download_url, 'width': 192, 'height': 192 * height / width})
+                files.append({
+                    'image': download_url,
+                    'width': 480,
+                    'height': int(480 * height / width)
+                })
         except Exception as e:
             print('failed to query pic from db: ', e)
             message['msg'] = e

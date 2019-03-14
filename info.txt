@@ -1,4 +1,4 @@
-proxychains googleimagesdownload --keywords "华表奖2018明星红毯" --limit 100
+proxychains googleimagesdownload --proxy 127.0.0.1:5566 --keywords "华表奖2018明星红毯" --limit 100
 
 python3 encode_faces.py --dataset football --encodings encodings_ft.pickle --detection-method hog
 

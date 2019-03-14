@@ -1,0 +1,63 @@
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
+    <title>图片人脸测试页面</title>
+</head>
+<body>
+    <a id="prev_page" href="">上一页</a>
+    <a id="next_page" href="">下一页</a>
+    </p>
+    <img id="test_pic" alt="test" ></img>
+    <div id="container"></div>
+    <canvas id="myCanvas" width="600" height="200"></canvas>
+    <script src="js/jquery.js"></script>
+    <script>
+        function GetQueryString(name)
+		{
+			var reg = new RegExp("(^|&)"+ name +"=([^&]*)(&|$)");
+			var r = window.location.search.substr(1).match(reg);
+			if (r != null)
+				return  unescape(r[2]);
+				
+			return null;
+		}
+        
+        var img_id = GetQueryString("img_id");
+        if (img_id != null) {
+            document.getElementById("prev_page").href = "avator.html?img_id=" + (parseInt(img_id) - 1);
+            document.getElementById("next_page").href = "avator.html?img_id=" + (parseInt(img_id) + 1);
+            
+            $.get("../get_pic?img_id=" + img_id, function(result) {
+                var image_url = result["image"];
+                document.getElementById("test_pic").src = image_url;
+                
+                var img = new Image()
+                img.src = image_url;
+                
+                //1. 获取画布
+                var canvas = document.getElementById("myCanvas")
+                //2. 获取画布上下文
+                var ctx = canvas.getContext("2d")
+                
+                $.get("../get_pic_faces?img_id=" + img_id, function(result) {
+                    var faces = result["result"];
+                    var x = 0;
+                    var y = 0;
+                    for (var i=0;i<faces.length;i++){
+                        var face = faces[i];
+                        var top = face["top"];
+                        var right = face["right"];
+                        var bottom = face["bottom"];
+                        var left = face["left"];
+
+                        console.log("img.onload() face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
+                        ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
+                        x += 128;
+                    }
+                });
+            });
+            
+        }
+    </script>
+</body>
+</html>

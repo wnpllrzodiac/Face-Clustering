@@ -8,21 +8,21 @@ import json
 import sys
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
-server_ip='10.102.25.132'
+server_ip='10.102.25.138'
     
 def fix_filename(filename):
     return filename.encode('utf-8').decode('ISO-8859-1', 'replace')
 
-def listDir(rootDir):
+def listDir(cat_id, rootDir):
     for filename in os.listdir(rootDir):
         pathname = os.path.join(rootDir, filename)
         print('pathname: %s' % pathname)
         if os.path.isdir(pathname):
-            listDir(pathname)
+            listDir(cat_id, pathname)
         else:
-            upload_file(pathname)
+            upload_file(cat_id, pathname)
     
-def upload_file(file):
+def upload_file(cat_id, file):
     if not os.path.exists(file):
         print('file %s NOT exists! ' % file)
         return
@@ -39,6 +39,7 @@ def upload_file(file):
     
     multipart_encoder = MultipartEncoder(
         fields = {
+            'cat_id': cat_id,
             'myFile': (fix_filename(os.path.basename(file)), open(file, 'rb'), 'application/octet-stream')
         },
         boundary = '-----------------------------' + str(random.randint(1e28, 1e29 - 1))
@@ -53,7 +54,16 @@ if __name__ == '__main__':
     #file = 'D:\\3g\\peoplePhoto\\【有图】#TYZ# 8P 摄影：JNLeung\\【有图】#TYZ# 8P 摄影：JNLeung_002.jpg'
     #upload_file(file)
    
-    folder = '/home/suhui/work/media/peoplePhoto'
+    path = '/home/suhui/work/media/peoplePhoto'
+    cat_id = 'test'
     if len(sys.argv) > 1:
-        folder = sys.argv[1]
-    listDir(folder) 
+        path = sys.argv[1]
+    if len(sys.argv) > 2:
+        cat_id = sys.argv[2]
+    
+    if os.path.isdir(path):
+        print('cat_id: {}, folder: {}'.format(cat_id, path))
+        listDir(cat_id, path)
+    else:
+        print('cat_id: {}, file: {}'.format(cat_id, path))
+        upload_file(cat_id, path)

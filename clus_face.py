@@ -3,6 +3,7 @@
 import pymysql
 import os
 import cv2
+import sys
 import numpy as np
 import face_recognition
 import matplotlib.pyplot as plt
@@ -13,7 +14,6 @@ from sklearn.cluster import DBSCAN
 def update_cluster(db, cursor, face_idx, label_id):
       try:
           sql = 'UPDATE clus_face_tb SET cluster_idx = %d WHERE id = %d' % (label_id, face_idx)
-          print('sql: ', sql)
           cursor.execute(sql)
           db.commit()
       except Exception as e:
@@ -118,13 +118,17 @@ def cluster_faces(db, cursor, cat_id):
     print("[INFO] total cluster_face_count %d" % cluster_face_count)
 
 if __name__ == '__main__':
+    cat_id = 'test'
+    if len(sys.argv) > 1:
+        cat_id = sys.argv[1]
+        
     # 打开数据库连接
     db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
     
     # 使用 cursor() 方法创建一个游标对象 cursor
     cursor = db.cursor()
     
-    cluster_faces(db, cursor, 'test')
+    cluster_faces(db, cursor, cat_id)
 
     # 关闭数据库连接
     db.close()

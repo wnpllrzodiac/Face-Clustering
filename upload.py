@@ -1,14 +1,13 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 
+import config
 import random
 import requests
 import os
 import json
 import sys
 from requests_toolbelt.multipart.encoder import MultipartEncoder
-
-server_ip='10.102.25.138'
     
 def fix_filename(filename):
     return filename.encode('utf-8').decode('ISO-8859-1', 'replace')
@@ -31,7 +30,7 @@ def upload_file(cat_id, file):
     
     size = os.path.getsize(file)
     
-    url = 'http://{}:9123/upload'.format(server_ip)
+    url = 'http://{}:9123/upload'.format(config.server_ip)
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:50.0) Gecko/20100101 Firefox/50.0', 
         'Referer': url 

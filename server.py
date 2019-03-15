@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 
+import config
 import cherrypy
 import os
 import urllib
@@ -14,97 +15,8 @@ import hashlib
 import time
 from imutils import build_montages
 
-server_ip='10.102.25.132'
-upload_folder = '/home/zodiac/work/media/upload_pic'
-
 def repaire_filename(filename):
     return filename.encode('ISO-8859-1').decode('utf-8', 'replace')
-
-def add_pic(cat_id, imagePath):
-    filesize = os.path.getsize(imagePath)
-    dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    image = cv2.imread(imagePath)
-    try:
-        image.shape
-    except:
-        print('failed to read img file: %s' % (imagePath))
-        return
-
-    # 打开数据库连接
-    db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
-    
-    # 使用 cursor() 方法创建一个游标对象 cursor
-    cursor = db.cursor()
-
-    #INSERT INTO students (class_id, name, gender, score) VALUES (2, '大牛', 'M', 80)
-    sql = "INSERT INTO clus_img_tb( \
-        cat_id, img_desc, img_path, width, height, add_time, filesize) \
-        VALUES ('%s', '%s',  '%s',  %d,  %d, '%s', %d)" % \
-        (cat_id, 'nothing', imagePath, image.shape[1], image.shape[0], dt, filesize)
-
-    try:
-        # 执行sql语句
-        cursor.execute(sql)
-        # 执行sql语句
-        db.commit()
-        print('pic %s added to db.' % imagePath)
-
-        cursor.execute('SELECT id from clus_img_tb WHERE img_path = %s', imagePath)
-        values = cursor.fetchall()
-        img_idx = values[0][0]
-        #print('img_idx: ', img_idx)
-
-        detect_face(db, cursor, imagePath, cat_id, img_idx)
-    except Exception as e:
-		    # 发生错误时回滚
-        db.rollback()
-        print('failed to add img record: ', e)
-
-    db.close()
-
-def save_face(db, cursor, imagePath, cat_id, img_idx, box, feature):
-    bytes_feature = feature.tostring()
-    #print(bytes_feature)
-
-    try:
-      top, right, bottom, left = box
-      cursor.execute('insert into clus_face_tb (cat_id, img_idx, box_left, box_top, box_right, box_bottom, feature) \
-          values (%s, %s, %s, %s, %s, %s, %s)', (cat_id, img_idx, left, top, right, bottom, bytes_feature))
-
-      db.commit()
-
-      #cursor.execute('select feature from clus_face_tb where img_idx = %s' % (123))
-      #values = cursor.fetchall()
-
-      #print(values)
-      #feature = np.frombuffer(values[0][0], dtype=np.float64) #np.float32
-      #print(feature)
-    except Exception as e:
-        # 发生错误时回滚
-        db.rollback()
-        print('failed to add face record: ', e)
-
-def detect_face(db, cursor, imagePath, cat_id, img_idx):
-    image = cv2.imread(imagePath)
-    try:
-        image.shape
-    except:
-        print('failed to read img file: %s' % (imagePath))
-        return False
-
-    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    # detect the (x,y) coordinates of the bounding boxes
-    # corresponding to each face in the input image
-    boxes = face_recognition.face_locations(rgb, model="HOG")
-    #print(boxes)
-
-    # compute the facial embedding for the face
-    encodings = face_recognition.face_encodings(rgb, boxes)
-    #print(encodings)
-
-    for box,enc in zip(boxes, encodings):
-        save_face(db, cursor, imagePath, cat_id, img_idx, box, enc)
 
 class ImgClusterServer:
     @cherrypy.expose
@@ -143,7 +55,10 @@ class ImgClusterServer:
         m = hashlib.md5()
         str_file = '%d_%s' % (int(time.time() * 1000), basename)
         m.update(str_file.encode('utf-8'))
-        filepath = os.path.join(upload_folder, m.hexdigest())
+        folder = os.path.join(config.upload_folder, cat_id)
+        if not os.path.exists(folder):
+            os.mkdir(folder)
+        filepath = os.path.join(folder, m.hexdigest() + '.' + basename.split('.')[-1])
         size = 0
         with myFile.file as upload_file, open(filepath, 'wb') as to_save:
             while True:
@@ -152,10 +67,8 @@ class ImgClusterServer:
                     break
                 to_save.write(data)
                 size += len(data)
-                
-        add_pic(cat_id, filepath)
 
-        return out % (server_ip, size, basename, myFile.content_type, urllib.parse.quote(basename))
+        return out % (config.server_ip, size, basename, myFile.content_type, urllib.parse.quote(basename))
         
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -168,7 +81,10 @@ class ImgClusterServer:
         m = hashlib.md5()
         str_file = '%d_%s' % (int(time.time() * 1000), basename)
         m.update(str_file.encode('utf-8'))
-        filepath = os.path.join(upload_folder, m.hexdigest() + '.' + basename.split('.')[-1])
+        folder = os.path.join(config.upload_folder, cat_id)
+        if not os.path.exists(folder):
+            os.mkdir(folder)
+        filepath = os.path.join(folder, m.hexdigest() + '.' + basename.split('.')[-1])
         size = 0
         with myFile.file as upload_file, open(filepath, 'wb') as to_save:
             while True:
@@ -177,8 +93,6 @@ class ImgClusterServer:
                     break
                 to_save.write(data)
                 size += len(data)
-
-        add_pic(cat_id, filepath)
 
         message = {
             'code': 0,
@@ -191,7 +105,7 @@ class ImgClusterServer:
         
     @cherrypy.expose
     def download(self):
-        path = os.path.join(upload_folder, 'pdf_file.pdf')
+        path = os.path.join(config.upload_folder, 'pdf_file.pdf')
         return static.serve_file(path, 'application/x-download',
                                  'attachment', os.path.basename(path))
 
@@ -266,7 +180,7 @@ class ImgClusterServer:
                 top, right, bottom, left = v[2:6]
                 width, height = v[6:]
                 f = path.split('/')[-1]
-                download_url = 'http://%s:9123/img/%s' % (server_ip, urllib.parse.quote(f))
+                download_url = 'http://%s:9123/img/%s/%s' % (config.server_ip, cat_id, f)
                 faces.append({
                     'image': download_url, 
                     'top': top, 
@@ -319,7 +233,7 @@ class ImgClusterServer:
             if len(values):
                 path = values[0][1]
                 f = path.split('/')[-1]
-                download_url = 'http://%s:9123/img/%s' % (server_ip, urllib.parse.quote(f))
+                download_url = 'http://%s:9123/img/%s' % (config.server_ip, urllib.parse.quote(f))
                 message['image'] = download_url
             for v in values:
                 idx = v[0]
@@ -352,6 +266,10 @@ class ImgClusterServer:
             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
         </head>
         <body>
+            <a id="prev_page" href="%s">上一页</a>
+            <a id="next_page" href="%s">下一页</a>
+            <a id="all_pics" href="%s">图片</a>
+            </p>
             <img src="http://%s:9123/montage/%s" with="640" height="480"/>
         </body>
         </html>'''
@@ -395,12 +313,16 @@ class ImgClusterServer:
 
         db.close()
 
-        return out % (server_ip, pic_name)
+        return out % (\
+            'get_cluster_montage?cat_id={}&cluster_idx={}'.format(cat_id, int(cluster_idx) - 1), \
+            'get_cluster_montage?cat_id={}&cluster_idx={}'.format(cat_id, int(cluster_idx) + 1), \
+            'static/waterfall.html?cat_id={}&cluster_idx={}'.format(cat_id, cluster_idx), \
+            config.server_ip, pic_name)
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def get_pic(self, img_id):
-        sql = 'SELECT img_path,width,height from clus_img_tb WHERE id = %s' % (img_id)
+        sql = 'SELECT img_path,width,height,cat_id from clus_img_tb WHERE id = %s' % (img_id)
         
         message = {
             'code': -1,
@@ -418,15 +340,19 @@ class ImgClusterServer:
         try:
             cursor.execute(sql)
             values = cursor.fetchall()
-            path = values[0][0]
-            w,h = values[0][1:]
-            f = path.split('/')[-1]
-            download_url = 'http://%s:9123/img/%s' % (server_ip, f)
-            message['code'] = 0
-            message['msg']  = 'o.k.'
-            message['image']  = download_url
-            message['width']  = w
-            message['height'] = h
+            if len(values):
+                path = values[0][0]
+                w,h = values[0][1:3]
+                cat_id = values[0][3]
+                f = path.split('/')[-1]
+                download_url = 'http://%s:9123/img/%s/%s' % (config.server_ip, cat_id, f)
+                message['code'] = 0
+                message['msg']  = 'o.k.'
+                message['image']  = download_url
+                message['width']  = w
+                message['height'] = h
+            else:
+                message['msg']  = 'no such pic'
         except Exception as e:
             print('failed to query pic from db: ', e)
             message['msg'] = e
@@ -462,9 +388,9 @@ class ImgClusterServer:
             values = cursor.fetchall()
             for v in values:
                 path = v[0]
-                width, height = v[1:] # 192 288
+                width, height = v[1:3] # 192 288
                 f = path.split('/')[-1]
-                download_url = 'http://%s:9123/img/%s' % (server_ip, urllib.parse.quote(f))
+                download_url = 'http://%s:9123/img/%s/%s' % (config.server_ip, cat_id, f)
                 files.append({
                     'image': download_url,
                     'width': 480,
@@ -529,7 +455,7 @@ if __name__ == '__main__':
         },
         '/img': {
             'tools.staticdir.on': True,
-            'tools.staticdir.dir': upload_folder
+            'tools.staticdir.dir': config.image_folder
         },
         '/montage': {
             'tools.staticdir.on': True,

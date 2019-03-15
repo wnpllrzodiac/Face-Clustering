@@ -1,4 +1,8 @@
-proxychains googleimagesdownload --proxy 127.0.0.1:5566 --keywords "华表奖2018明星红毯" --limit 100
+https://github.com/hardikvasa/google-images-download
+
+googleimagesdownload --proxy 127.0.0.1:5566 --keywords "华表奖2018明星红毯" --limit 100
+
+proxychains googleimagesdownload --keywords "华表奖2018明星红毯" --limit 100
 
 python3 encode_faces.py --dataset football --encodings encodings_ft.pickle --detection-method hog
 
@@ -9,3 +13,5 @@ python3 cluster_faces.py --encodings encodings_she.pickle -p 0.35 -m 3
 
 add_db.py    -- add record
 clus_face.py -- cluster faces
+
+http://192.168.23.71:9123/get_cluster_montage?cat_id=ysmx&cluster_idx=4

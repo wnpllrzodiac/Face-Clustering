@@ -43,7 +43,7 @@ class ImgClusterServer:
             myFile length: %s<br />
             myFile filename: %s<br />
             myFile mime-type: %s<br />
-            <img src="http://%s:9123/img/%s" with="320" height="240"/>
+            <img src="http://%s:%d/img/%s" with="320" height="240"/>
         </body>
         </html>'''
 
@@ -58,7 +58,8 @@ class ImgClusterServer:
         folder = os.path.join(config.upload_folder, cat_id)
         if not os.path.exists(folder):
             os.mkdir(folder)
-        filepath = os.path.join(folder, m.hexdigest() + '.' + basename.split('.')[-1])
+        new_basename = m.hexdigest() + '.' + basename.split('.')[-1]
+        filepath = os.path.join(folder, new_basename)
         size = 0
         with myFile.file as upload_file, open(filepath, 'wb') as to_save:
             while True:
@@ -68,7 +69,7 @@ class ImgClusterServer:
                 to_save.write(data)
                 size += len(data)
 
-        return out % (config.server_ip, size, basename, myFile.content_type, urllib.parse.quote(basename))
+        return out % (size, basename, myFile.content_type, config.image_server_ip, config.image_server_port, new_basename)
         
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -180,7 +181,7 @@ class ImgClusterServer:
                 top, right, bottom, left = v[2:6]
                 width, height = v[6:]
                 f = path.split('/')[-1]
-                download_url = 'http://%s:9123/img/%s/%s' % (config.server_ip, cat_id, f)
+                download_url = 'http://%s:%d/img/%s/%s' % (config.image_server_ip, config.image_server_port, cat_id, f)
                 faces.append({
                     'image': download_url, 
                     'top': top, 
@@ -233,7 +234,7 @@ class ImgClusterServer:
             if len(values):
                 path = values[0][1]
                 f = path.split('/')[-1]
-                download_url = 'http://%s:9123/img/%s' % (config.server_ip, urllib.parse.quote(f))
+                download_url = 'http://%s:%d/img/%s' % (config.image_server_ip, config.image_server_port, urllib.parse.quote(f))
                 message['image'] = download_url
             for v in values:
                 idx = v[0]
@@ -345,7 +346,7 @@ class ImgClusterServer:
                 w,h = values[0][1:3]
                 cat_id = values[0][3]
                 f = path.split('/')[-1]
-                download_url = 'http://%s:9123/img/%s/%s' % (config.server_ip, cat_id, f)
+                download_url = 'http://%s:%d/img/%s/%s' % (config.image_server_ip, config.image_server_port, cat_id, f)
                 message['code'] = 0
                 message['msg']  = 'o.k.'
                 message['image']  = download_url
@@ -390,7 +391,7 @@ class ImgClusterServer:
                 path = v[0]
                 width, height = v[1:3] # 192 288
                 f = path.split('/')[-1]
-                download_url = 'http://%s:9123/img/%s/%s' % (config.server_ip, cat_id, f)
+                download_url = 'http://%s:%d/img/%s/%s' % (config.image_server_ip, config.image_server_port, cat_id, f)
                 files.append({
                     'image': download_url,
                     'width': 480,
@@ -436,15 +437,17 @@ class ImgClusterServer:
         return message
 
 if __name__ == '__main__':
-    cherrypy.config.update({
-            'server.socket_host': '0.0.0.0', #
-            'server.socket_port': 9123, #监听端口，默认8080
-            'server.log_file': True, #记录日志，默认关闭
-            'server.log_access_file': '/tmp/sample.log', #存储访问日志，默认是显示到屏幕上
-            'server.log_to_screen': True, #将日志显示到屏幕，默认为True
-            'server.log_tracebacks': True, #将跟踪信息写入日志，默认为True。False时只写入500错误
-        })
+    port = 9123
+    
     conf = {
+        'global': {
+            'server.shutdown_timeout': 1,
+            'server.socket_host': '0.0.0.0',
+            'server.socket_port': port,
+            'tools.encode.on': True,
+            'tools.encode.encoding': "utf-8",
+            #'server.thread_pool': 2, # single thread server.
+        },
         '/': {
             'tools.sessions.on': True,
             'tools.staticdir.root': os.path.abspath(os.getcwd())

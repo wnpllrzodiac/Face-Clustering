@@ -15,3 +15,5 @@ add_db.py    -- add record
 clus_face.py -- cluster faces
 
 http://192.168.23.71:9123/get_cluster_montage?cat_id=ysmx&cluster_idx=4
+
+setsid nohup python3 live_server.py >server.log &

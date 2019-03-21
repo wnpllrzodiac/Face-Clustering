@@ -1,0 +1,77 @@
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
+    <title>所有人物测试页面</title>
+</head>
+<body>
+    <div id="container"></div>
+    <canvas id="myCanvas" width="800" height="800" style="border:3px solid #d3d3d3;">您的浏览器不支持 HTML5 canvas 标签</canvas>
+    <script src="js/jquery.js"></script>
+    <script>
+        function GetQueryString(name)
+		{
+			var reg = new RegExp("(^|&)"+ name +"=([^&]*)(&|$)");
+			var r = window.location.search.substr(1).match(reg);
+			if (r != null)
+				return  unescape(r[2]);
+				
+			return null;
+		}
+        
+        var cat_id = GetQueryString("cat_id");
+        if (cat_id == null)
+            cat_id = "test";
+            
+        $.get('../get_cluster_count?cat_id=' + cat_id, function(result) {
+            if (result["code"] == 0) {
+                var cluster_count = result["cluster_count"];
+                console.log("cluster_count: " + cluster_count);
+                
+                $.ajaxSettings.async = false;
+                var x = 0;
+                var y = 0;
+                for (var i=0;i<cluster_count;i++) {
+                    $.get('../get_cluster_faces?cat_id=' + cat_id + "&cluster_idx=" + i, function(result) {
+                        if (result["code"] == 0) {
+                            var faces = result["result"];
+                            if (faces.length > 0) {
+                                var face_0 = faces[0];
+                                var image_url = face_0["image"];
+                                var top = face_0["top"];
+                                var right = face_0["right"];
+                                var bottom = face_0["bottom"];
+                                var left = face_0["left"];
+                                
+                                console.log("cluster_face #" + i + ": " + image_url + ", face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
+                                
+                                var img = new Image()
+                                img.src = image_url;
+                                img.onload = function() {
+                                    //1. 获取画布
+                                    var canvas = document.getElementById("myCanvas")
+                                    //2. 获取画布上下文
+                                    var ctx = canvas.getContext("2d")
+                                    
+                                    ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
+                                    x += 96;
+                                    if (x >= 96 * 8) {
+                                        x = 0;
+                                        y += 96;
+                                    }
+                                }
+                            }
+                            else {
+                                console.log("no face found in cluster_idx: " + i);
+                            }
+                        }
+                    });
+                }
+            }
+            else {
+                console.log("no cluster faced found");
+                alert("没有可用人像分类");
+            }
+        });
+    </script>
+</body>
+</html>

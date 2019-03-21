@@ -27,6 +27,26 @@
                 var cluster_count = result["cluster_count"];
                 console.log("cluster_count: " + cluster_count);
                 
+                var canvas = document.getElementById("myCanvas");
+                var ctx = canvas.getContext("2d");
+                canvas.addEventListener('click',function(event){
+                    var x = event.pageX - canvas.getBoundingClientRect().left;
+                    var y = event.pageY - canvas.getBoundingClientRect().top;
+                    console.log("x: " + x + ", y: " + y);
+                    if (x < 96 * 8 && y < 96 * 8) {
+                        var index = Math.floor(x / 96) + Math.floor(y / 96) * 8;
+                        console.log("index: " + index);
+                        
+                        if (index < cluster_count)
+                            window.location.href="../get_cluster_montage?cat_id=" + cat_id + "&cluster_idx=" + index;
+                        else
+                            console.log("invalid index");
+                    }
+                    else {
+                        console.log("out of box");
+                    }
+                });
+                
                 $.ajaxSettings.async = false;
                 var x = 0;
                 var y = 0;
@@ -42,16 +62,11 @@
                                 var bottom = face_0["bottom"];
                                 var left = face_0["left"];
                                 
-                                console.log("cluster_face #" + i + ": " + image_url + ", face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
+                                console.log("cluster_face #" + i + ": " + image_url + " , face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
                                 
                                 var img = new Image()
                                 img.src = image_url;
                                 img.onload = function() {
-                                    //1. 获取画布
-                                    var canvas = document.getElementById("myCanvas")
-                                    //2. 获取画布上下文
-                                    var ctx = canvas.getContext("2d")
-                                    
                                     ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
                                     x += 96;
                                     if (x >= 96 * 8) {

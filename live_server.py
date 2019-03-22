@@ -369,7 +369,7 @@ class ImgClusterServer:
         i = 0
         start_index = int(page_index) * int(page_size)
 
-        sql = 'SELECT img_path, width, height from clus_img_tb LIMIT %d, %d' % (start_index, int(page_size))
+        sql = 'SELECT id, img_path, width, height from clus_img_tb WHERE cat_id = "%s" LIMIT %d, %d' % (cat_id, start_index, int(page_size))
         
         message = {
             'code': -1,
@@ -379,7 +379,7 @@ class ImgClusterServer:
         }
 
         # 打开数据库连接
-        db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+        db = pymysql.connect("192.168.23.71","root","tysxwg07","test")
         
         # 使用 cursor() 方法创建一个游标对象 cursor
         cursor = db.cursor()
@@ -388,11 +388,13 @@ class ImgClusterServer:
             cursor.execute(sql)
             values = cursor.fetchall()
             for v in values:
-                path = v[0]
-                width, height = v[1:3] # 192 288
+                id = v[0]
+                path = v[1]
+                width, height = v[2:4] # 192 288
                 f = path.split('/')[-1]
                 download_url = 'http://%s:%d/img/%s/%s' % (config.image_server_ip, config.image_server_port, cat_id, f)
                 files.append({
+                    'id': id,
                     'image': download_url,
                     'width': 480,
                     'height': int(480 * height / width)

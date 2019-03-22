@@ -15,12 +15,16 @@ from imutils import paths
 from imutils import build_montages
 from sklearn.cluster import DBSCAN
 
+total_detect_msec = 0
+
 # simple log functions.
 def trace(msg):
     date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print("[%s][trace] %s"%(date, msg))
 
 def add_pic(cat_id, imagePath):
+    global total_detect_msec
+    
     filesize = os.path.getsize(imagePath)
     dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     image = cv2.imread(imagePath)
@@ -47,13 +51,17 @@ def add_pic(cat_id, imagePath):
         cursor.execute(sql)
         # 执行sql语句
         db.commit()
-        trace('pic %s added to db.' % imagePath)
+        trace('pic %s(res %d x %d) added to db.' % (imagePath, image.shape[1], image.shape[0]))
 
         cursor.execute('SELECT id from clus_img_tb WHERE img_path = %s', imagePath)
         values = cursor.fetchall()
         img_idx = values[0][0]
 
+        start_time = get_msec()
         detect_face(db, cursor, imagePath, cat_id, img_idx)
+        detect_msec = get_msec() - start_time
+        trace('detect_msec: %d (avg %d)' % (detect_msec, total_detect_msec))
+        total_detect_msec = (total_detect_msec * 4 + detect_msec) // 5
         return True
     except Exception as e:
 		    # 发生错误时回滚
@@ -74,7 +82,7 @@ def save_face(db, cursor, imagePath, cat_id, img_idx, box, feature):
 
       db.commit()
 
-      trace('img %d, face (%d, %d, %d, %d) added to db' % (img_idx, left, top, right, bottom))
+      trace('img(id #%d): face (ltrb: %d, %d, %d, %d) added to db' % (img_idx, left, top, right, bottom))
     except Exception as e:
         db.rollback()
         trace('failed to add face record: {}'.format(e))
@@ -100,15 +108,16 @@ def detect_face(db, cursor, imagePath, cat_id, img_idx):
 
     for box,enc in zip(boxes, encodings):
         save_face(db, cursor, imagePath, cat_id, img_idx, box, enc)
-
-def update_cluster(db, cursor, face_idx, label_id):
-      try:
-          sql = 'UPDATE clus_face_tb SET cluster_idx = %d WHERE id = %d' % (label_id, face_idx)
-          cursor.execute(sql)
-          db.commit()
-      except Exception as e:
-        trace('failed to update face data: {}'.format(e))
-        db.rollback()
+        
+def update_cluster(db, cursor, faceid_list, label_id):
+        try:
+            items = ','.join(faceid_list)
+            sql = 'UPDATE clus_face_tb SET cluster_idx = %d WHERE id in (%s)' % (label_id, items)
+            cursor.execute(sql)
+            db.commit()
+        except Exception as e:
+            trace('failed to update face data: {}'.format(e))
+            db.rollback()
 
 def cluster_faces(cat_id):
     save_montage = False
@@ -120,25 +129,25 @@ def cluster_faces(cat_id):
     cursor = db.cursor()
     
     try:
-      # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
-      cursor.execute('SELECT clus_face_tb.id, img_idx, box_top, box_right, box_bottom, box_left, feature, img_path from clus_face_tb \
-        left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
-        WHERE clus_face_tb.cat_id = %s', cat_id)
-      values = cursor.fetchall()
+        # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
+        cursor.execute('SELECT clus_face_tb.id, img_idx, box_top, box_right, box_bottom, box_left, feature, img_path from clus_face_tb \
+            left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
+            WHERE clus_face_tb.cat_id = %s', cat_id)
+        values = cursor.fetchall()
 
-      data = []
-      for v in values:
-          #trace(values)
-          face_idx  = v[0]
-          img_idx   = v[1]
-          top, right, bottom, left = v[2:6]
-          feature   = np.frombuffer(v[6], dtype=np.float64)
-          img_path  = v[7]
+        data = []
+        for v in values:
+            #trace(values)
+            face_idx  = v[0]
+            img_idx   = v[1]
+            top, right, bottom, left = v[2:6]
+            feature   = np.frombuffer(v[6], dtype=np.float64)
+            img_path  = v[7]
 
-          #trace(feature)
-          box = (top, right, bottom, left)
-          d = [{"faceIndex": face_idx, "imageIndex": img_idx, "imagePath": img_path, "loc": box, "encoding": feature}]
-          data.extend(d)
+            #trace(feature)
+            box = (top, right, bottom, left)
+            d = [{"faceIndex": face_idx, "imageIndex": img_idx, "imagePath": img_path, "loc": box, "encoding": feature}]
+            data.extend(d)
     except Exception as e:
         trace('failed to read face data: {}'.format(e))
         db.close()
@@ -168,7 +177,7 @@ def cluster_faces(cat_id):
         for num in range(0, 20):
             filename = 'out_%d.jpg' % num
             if os.path.exists(filename):
-              os.remove(filename)
+              os.unlink(filename)
               trace('file %s deleted' % filename)
       
     # loop over the unique face integers
@@ -183,7 +192,10 @@ def cluster_faces(cat_id):
         cluster_face_count = cluster_face_count + len(idxs)
         
         if labelID != -1:
-            [update_cluster(db, cursor, data[i]["faceIndex"], labelID) for i in idxs]
+            faceIdList = []
+            for i in idxs:
+                faceIdList.append(str(data[i]["faceIndex"]))
+            update_cluster(db, cursor, faceIdList, labelID)
 
         if save_montage:
             idxs = np.random.choice(idxs, size=min(25, len(idxs)),
@@ -230,6 +242,8 @@ def get_msec():
     return msec
     
 if __name__ == '__main__':
+    trace('clus face work started...')
+    
     total_cluster_msec = 0
     while True:
         trace('ready to scan pic')
@@ -253,21 +267,27 @@ if __name__ == '__main__':
                         if add_pic(cat_id, new_filepath):
                             cluster_face = True
                         else:
-                            trace('failed to read pic')
-                            shutil.remove(new_filepath)
+                            trace('failed to read pic, remove file')
+                            os.unlink(new_filepath)
                     except Exception as e:
                         trace('failed to move file: {}'.format(e))
                 
                 if cluster_face:
                     trace('cluster face: %s' % cat_id)
                     start_time = get_msec()
-                    cluster_faces(cat_id)
-                    cluster_msec = get_msec() - start_time
-                    trace('cluster_msec: %d (avg %d)' % (cluster_msec, total_cluster_msec))
-                    total_cluster_msec = (total_cluster_msec * 4 + cluster_msec) // 5
+                    try:
+                        cluster_faces(cat_id)
+                        
+                        cluster_msec = get_msec() - start_time
+                        trace('cluster_msec: %d (avg %d)' % (cluster_msec, total_cluster_msec))
+                        total_cluster_msec = (total_cluster_msec * 4 + cluster_msec) // 5
+                    except Exception as e:
+                        trace('failed to cluster_faces: {}'.format(e))
                     
         used_time = int(time.time()) - t
         sleep_sec = 30 - used_time
         if sleep_sec > 3:
             time.sleep(sleep_sec)
+    
+    trace('clus face work exited')
 

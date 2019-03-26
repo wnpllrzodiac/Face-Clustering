@@ -28,6 +28,7 @@ class ImgClusterServer:
             <body>
                  <form action="upload_test" enctype="multipart/form-data" method="post">
                      filename:<input name="myFile" type="file" />
+                     cat_id:<input name="cat_id" type="text" value="test"/>
                      <input type="submit" />
                  </form>
             </body>

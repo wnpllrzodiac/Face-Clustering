@@ -246,6 +246,78 @@ def cluster_faces(cat_id):
     db.close()
     trace("[INFO] total cluster_face_count %d" % cluster_face_count)
 
+def get_face_encoding(face_id):
+    # 打开数据库连接
+    db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+    
+    # 使用 cursor() 方法创建一个游标对象 cursor
+    cursor = db.cursor()
+    
+    try:
+        # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
+        cursor.execute('SELECT clus_face_tb.id, img_idx, box_top, box_right, box_bottom, box_left, feature from clus_face_tb \
+            left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
+            WHERE clus_face_tb.id = %s', face_id)
+        values = cursor.fetchall()
+
+        if len(values) > 0:
+            v = values[0]
+            #trace(values)
+            face_idx  = v[0]
+            img_idx   = v[1]
+            top, right, bottom, left = v[2:6]
+            feature   = np.frombuffer(v[6], dtype=np.float64)
+
+            #trace(feature)
+            box = (top, right, bottom, left)
+            return feature
+    except Exception as e:
+        trace('failed to read face data: {}'.format(e))
+        db.close()
+    
+    return None
+
+def test_compare_face(cat_id, unknown_face_encoding):
+    # 打开数据库连接
+    db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+    
+    # 使用 cursor() 方法创建一个游标对象 cursor
+    cursor = db.cursor()
+    
+    try:
+        # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
+        cursor.execute('SELECT clus_face_tb.id, img_idx, box_top, box_right, box_bottom, box_left, feature, img_path from clus_face_tb \
+            left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
+            WHERE clus_face_tb.cat_id = %s', cat_id)
+        values = cursor.fetchall()
+
+        data = []
+        for v in values:
+            #trace(values)
+            face_idx  = v[0]
+            img_idx   = v[1]
+            top, right, bottom, left = v[2:6]
+            feature   = np.frombuffer(v[6], dtype=np.float64)
+            img_path  = v[7]
+
+            #trace(feature)
+            box = (top, right, bottom, left)
+            d = [{"faceIndex": face_idx, "imageIndex": img_idx, "imagePath": img_path, "loc": box, "encoding": feature}]
+            data.extend(d)
+    except Exception as e:
+        trace('failed to read face data: {}'.format(e))
+        db.close()
+        return
+
+    data = np.array(data)
+    known_faces = np.array([d["encoding"] for d in data])
+    trace('known_faces count: {}'.format(len(known_faces)))
+
+    #结果是True/false的数组，未知面孔known_faces阵列中的任何人相匹配的结果
+    results = face_recognition.compare_faces(known_faces, unknown_face_encoding)
+     
+    print("result :{}".format(results))
+
 def test():
     cat_id = 'test'
         
@@ -259,6 +331,11 @@ def get_msec():
     return msec
     
 if __name__ == '__main__':
+    #cat_id = 'mwyy'
+    #unknown_face_encoding = get_face_encoding('5290')
+    #test_compare_face(cat_id, unknown_face_encoding)
+    #exit(0)
+
     trace('clus face work started...')
     
     total_cluster_msec = 0

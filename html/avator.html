@@ -9,7 +9,7 @@
     </p>
     <img id="test_pic" alt="test" height="480" ></img>
     <div id="container"></div>
-    <canvas id="myCanvas" width="600" height="200"></canvas>
+    <canvas id="myCanvas" width="800" height="1200"></canvas>
     <script src="js/jquery.js"></script>
     <script>
         function GetQueryString(name)
@@ -55,7 +55,7 @@
                                 console.log("face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
                                 ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
                                 x += 96;
-                                if (x >= 96 * 5) {
+                                if (x >= 96 * 8) {
                                     x = 0;
                                     y += 96;
                                 }

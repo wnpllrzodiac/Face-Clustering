@@ -102,6 +102,23 @@ def detect_face(db, cursor, imagePath, cat_id, img_idx):
     boxes = face_recognition.face_locations(rgb, model="HOG")
     #print(boxes)
 
+    if len(boxes) == 0:
+        trace('NO face detected, try equalizeHist')
+        
+        (b, g, r) = cv2.split(image)
+        bH = cv2.equalizeHist(b)
+        gH = cv2.equalizeHist(g)
+        rH = cv2.equalizeHist(r)
+        # 合并每一个通道
+        rgb = cv2.merge((bH, gH, rH))
+        start_time = get_msec() 
+        boxes = face_recognition.face_locations(rgb, model="HOG")
+        recognition_msec = get_msec() - start_time
+
+        if len(boxes) == 0:
+            trace('NO face detected')
+            return False
+
     # compute the facial embedding for the face
     encodings = face_recognition.face_encodings(rgb, boxes)
     #print(encodings)

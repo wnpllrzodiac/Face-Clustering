@@ -21,3 +21,55 @@ setsid nohup python3 -u live_server.py >server.log &
 nohup python3 -u clus_face.py >clus_face.py.log &
 
 http://192.168.23.71:9123/static/allperson.html?cat_id=fn
+
+====== nginx build =========
+./configure --prefix=/data/michael/git/srs/trunk/objs/nginx-1.5.7/_release --with-http_image_filter_module --with-http_ssl_module --add-module=/data/michael/git/nginx-ts-module --add-module=/data/michael/git/nginx-tsenc-module --add-module=/data/michael/git/ngx_devel_kit-0.3.1rc1 --add-module=/data/michael/git/form-input-nginx-module-0.12 --add-module=/data/michael/git/nginx-http-flv-module --add-module=/data/michael/git/ngx_cache_purge-2.3 --add-module=/data/michael/git/nginx-vod-module --with-http_stub_status_module --with-file-aio --with-cc-opt="-I/data/michael/git/srs_build/trunk/objs/ffmpeg/include" --with-ld-opt="-L/data/michael/git/srs_build/trunk/objs/ffmpeg/lib -lm -lpthread -lrt -lavfilter -lavformat -lswscale -lavcodec -lavutil -lswresample -lpostproc -ljpeg -lzmq -lx264 -lx265 -lwebp -lspeex -lmp3lame -lfreetype -lfdk-aac -lz -ldl -lstdc++"
+
+====== nginx conf =================
+server {
+    listen      9124;
+    server_name localhost;
+    image_filter_buffer 4M;
+
+    set $width "-";
+    set $quality "75";
+    set $rotate "0";
+    set $height "-";
+
+    if ($arg_w != '') {
+        set $width $arg_w;
+    }
+    if ($arg_h != '') {
+        set $height $arg_h;
+    }
+    if ($arg_r != '') {
+        set $rotate $arg_r;
+    }
+    location /img {
+        alias    /data/dllive/piclive/pic;
+        error_page   415 = /empty;
+    }
+
+    location /imgr {
+        alias    /data/dllive/piclive/pic;
+        image_filter resize $width $height;
+        image_filter rotate $rotate;
+        error_page   415 = /empty;
+    }
+
+    location ~ /preview/(.*) {
+        alias /data/dllive/piclive;
+        try_files /pic/$1 /upload/$1 =404;
+    }
+
+    location /pic {
+        alias /data/dllive/piclive/pic;
+    }
+    location /upload {
+        alias /data/dllive/piclive/upload;
+    }
+
+    location = /empty {
+        empty_gif;
+    }
+}

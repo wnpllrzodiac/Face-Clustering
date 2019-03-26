@@ -43,7 +43,7 @@ class ImgClusterServer:
             myFile length: %s<br />
             myFile filename: %s<br />
             myFile mime-type: %s<br />
-            <img src="http://%s:%d/img/%s" with="320" height="240"/>
+            <img src="http://%s:%d/preview/%s/%s" with="320" height="240"/>
         </body>
         </html>'''
 
@@ -69,7 +69,7 @@ class ImgClusterServer:
                 to_save.write(data)
                 size += len(data)
 
-        return out % (size, basename, myFile.content_type, config.image_server_ip, config.image_server_port, new_basename)
+        return out % (size, basename, myFile.content_type, config.image_server_ip, config.image_server_port, cat_id, new_basename)
         
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -234,8 +234,10 @@ class ImgClusterServer:
             if len(values):
                 path = values[0][1]
                 f = path.split('/')[-1]
-                download_url = 'http://%s:%d/img/%s' % (config.image_server_ip, config.image_server_port, urllib.parse.quote(f))
+                download_url = 'http://%s:%d/img/%s' % (config.image_server_ip, config.image_server_port, f)
+                small_url = 'http://%s:%d/imgr/%s?h=480' % (config.image_server_ip, config.image_server_port, f)
                 message['image'] = download_url
+                message['small_image'] = small_url
             for v in values:
                 idx = v[0]
                 top, right, bottom, left = v[2:6]
@@ -347,9 +349,11 @@ class ImgClusterServer:
                 cat_id = values[0][3]
                 f = path.split('/')[-1]
                 download_url = 'http://%s:%d/img/%s/%s' % (config.image_server_ip, config.image_server_port, cat_id, f)
+                small_url = 'http://%s:%d/imgr/%s/%s?h=480' % (config.image_server_ip, config.image_server_port, cat_id, f)
                 message['code'] = 0
                 message['msg']  = 'o.k.'
                 message['image']  = download_url
+                message['small_image']  = small_url
                 message['width']  = w
                 message['height'] = h
             else:

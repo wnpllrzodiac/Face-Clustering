@@ -29,7 +29,8 @@
             
             $.get("../get_pic?img_id=" + img_id, function(result) {
                 var image_url = result["image"];
-                document.getElementById("test_pic").src = image_url;
+                var small_url = result["small_image"];
+                document.getElementById("test_pic").src = small_url;
                 
                 var img = new Image()
                 img.src = image_url;

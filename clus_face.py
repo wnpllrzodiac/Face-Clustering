@@ -10,6 +10,8 @@ import time
 import datetime
 import numpy as np
 import face_recognition
+import multiprocessing
+import itertools
 import matplotlib.pyplot as plt
 from imutils import paths
 from imutils import build_montages
@@ -22,9 +24,30 @@ def trace(msg):
     date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print("[%s][trace] %s"%(date, msg))
 
-def add_pic(cat_id, imagePath):
+def process_images_in_process_pool(cat_id, images, number_of_cpus):
+    if number_of_cpus == -1:
+        processes = None
+    else:
+        processes = number_of_cpus
+
+    # macOS will crash due to a bug in libdispatch if you don't use 'forkserver'
+    context = multiprocessing
+    if "forkserver" in multiprocessing.get_all_start_methods():
+        context = multiprocessing.get_context("forkserver")
+
+    pool = context.Pool(processes=processes)
+
+    function_parameters = zip(
+        itertools.repeat(cat_id),
+        images
+    )
+
+    pool.starmap(add_image, function_parameters)
+
+def add_image(cat_id, imagePath):
     global total_detect_msec
-    
+
+    trace('add_image: cat_id {}, path {}'.format(cat_id, imagePath))
     filesize = os.path.getsize(imagePath)
     dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     image = cv2.imread(imagePath)
@@ -32,6 +55,7 @@ def add_pic(cat_id, imagePath):
         image.shape
     except:
         trace('failed to read img file: %s' % (imagePath))
+        os.unlink(imagePath)
         return False
 
     # 打开数据库连接
@@ -69,7 +93,8 @@ def add_pic(cat_id, imagePath):
         trace('failed to add img record: {}'.format(e))
     finally:
         db.close()
-        
+
+    os.unlink(imagePath)
     return False
 
 def save_face(db, cursor, imagePath, cat_id, img_idx, box, feature):
@@ -112,7 +137,7 @@ def detect_face(db, cursor, imagePath, cat_id, img_idx):
         # 合并每一个通道
         rgb = cv2.merge((bH, gH, rH))
         start_time = get_msec() 
-        boxes = face_recognition.face_locations(rgb, model="HOG")
+        boxes = face_recognition.face_locations(rgb, model="CNN")
         recognition_msec = get_msec() - start_time
 
         if len(boxes) == 0:
@@ -246,78 +271,6 @@ def cluster_faces(cat_id):
     db.close()
     trace("[INFO] total cluster_face_count %d" % cluster_face_count)
 
-def get_face_encoding(face_id):
-    # 打开数据库连接
-    db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
-    
-    # 使用 cursor() 方法创建一个游标对象 cursor
-    cursor = db.cursor()
-    
-    try:
-        # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
-        cursor.execute('SELECT clus_face_tb.id, img_idx, box_top, box_right, box_bottom, box_left, feature from clus_face_tb \
-            left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
-            WHERE clus_face_tb.id = %s', face_id)
-        values = cursor.fetchall()
-
-        if len(values) > 0:
-            v = values[0]
-            #trace(values)
-            face_idx  = v[0]
-            img_idx   = v[1]
-            top, right, bottom, left = v[2:6]
-            feature   = np.frombuffer(v[6], dtype=np.float64)
-
-            #trace(feature)
-            box = (top, right, bottom, left)
-            return feature
-    except Exception as e:
-        trace('failed to read face data: {}'.format(e))
-        db.close()
-    
-    return None
-
-def test_compare_face(cat_id, unknown_face_encoding):
-    # 打开数据库连接
-    db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
-    
-    # 使用 cursor() 方法创建一个游标对象 cursor
-    cursor = db.cursor()
-    
-    try:
-        # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
-        cursor.execute('SELECT clus_face_tb.id, img_idx, box_top, box_right, box_bottom, box_left, feature, img_path from clus_face_tb \
-            left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
-            WHERE clus_face_tb.cat_id = %s', cat_id)
-        values = cursor.fetchall()
-
-        data = []
-        for v in values:
-            #trace(values)
-            face_idx  = v[0]
-            img_idx   = v[1]
-            top, right, bottom, left = v[2:6]
-            feature   = np.frombuffer(v[6], dtype=np.float64)
-            img_path  = v[7]
-
-            #trace(feature)
-            box = (top, right, bottom, left)
-            d = [{"faceIndex": face_idx, "imageIndex": img_idx, "imagePath": img_path, "loc": box, "encoding": feature}]
-            data.extend(d)
-    except Exception as e:
-        trace('failed to read face data: {}'.format(e))
-        db.close()
-        return
-
-    data = np.array(data)
-    known_faces = np.array([d["encoding"] for d in data])
-    trace('known_faces count: {}'.format(len(known_faces)))
-
-    #结果是True/false的数组，未知面孔known_faces阵列中的任何人相匹配的结果
-    results = face_recognition.compare_faces(known_faces, unknown_face_encoding)
-     
-    print("result :{}".format(results))
-
 def test():
     cat_id = 'test'
         
@@ -331,11 +284,6 @@ def get_msec():
     return msec
     
 if __name__ == '__main__':
-    #cat_id = 'mwyy'
-    #unknown_face_encoding = get_face_encoding('5290')
-    #test_compare_face(cat_id, unknown_face_encoding)
-    #exit(0)
-
     trace('clus face work started...')
     
     total_cluster_msec = 0
@@ -347,24 +295,39 @@ if __name__ == '__main__':
                 cat_id = folder
                 trace('list pics in cat_id: %s' % cat_id)
                 
+                new_folder = os.path.join(config.image_folder, folder)
+                if not os.path.exists(new_folder):
+                    os.mkdir(new_folder)
+
+                multi_process = True
                 cluster_face = False
-                for file in os.listdir(os.path.join(config.upload_folder, folder)):
-                    filepath = '%s/%s/%s' % (config.upload_folder, folder, file)
-                    try:
-                        new_folder = os.path.join(config.image_folder, folder)
-                        if not os.path.exists(new_folder):
-                            os.mkdir(new_folder)
-                        new_filepath = os.path.join(new_folder, file)
-                        
-                        shutil.move(filepath, new_filepath)
-                        
-                        if add_pic(cat_id, new_filepath):
-                            cluster_face = True
-                        else:
-                            trace('failed to read pic, remove file')
-                            os.unlink(new_filepath)
-                    except Exception as e:
-                        trace('failed to move file: {}'.format(e))
+                if multi_process:
+                    images = []
+                    for file in os.listdir(os.path.join(config.upload_folder, folder)):
+                        filepath = '%s/%s/%s' % (config.upload_folder, folder, file)
+                        try:
+                            new_filepath = os.path.join(new_folder, file)
+                            shutil.move(filepath, new_filepath)
+                            images.append(new_filepath)
+                        except Exception as e:
+                            trace('failed to move file: {}'.format(e))
+
+                    if len(images) > 0:
+                        process_images_in_process_pool(cat_id, images, 8)
+                        cluster_face = True
+                else:
+                    for file in os.listdir(os.path.join(config.upload_folder, folder)):
+                        filepath = '%s/%s/%s' % (config.upload_folder, folder, file)
+                        try:
+                            new_filepath = os.path.join(new_folder, file)
+                            shutil.move(filepath, new_filepath)
+                            
+                            if add_image(cat_id, new_filepath):
+                                cluster_face = True
+                            else:
+                                trace('failed to read pic')
+                        except Exception as e:
+                            trace('failed to move file: {}'.format(e))
                 
                 if cluster_face:
                     trace('cluster face: %s' % cat_id)

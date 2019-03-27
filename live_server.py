@@ -243,6 +243,7 @@ class ImgClusterServer:
                 idx = v[0]
                 top, right, bottom, left = v[2:6]
                 faces.append({
+                    'id': idx,
                     'top': top, 
                     'right': right,
                     'bottom': bottom,

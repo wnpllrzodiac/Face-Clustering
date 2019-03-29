@@ -1,0 +1,76 @@
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
+    <title>人脸比对页面</title>
+</head>
+<body>
+    <img id="test_pic" alt="test" height="480" ></img>
+    <div id="container"></div>
+    <canvas id="myCanvas" width="800" height="1200"></canvas>
+    <script src="js/jquery.js"></script>
+    <script>
+        function GetQueryString(name)
+		{
+			var reg = new RegExp("(^|&)"+ name +"=([^&]*)(&|$)");
+			var r = window.location.search.substr(1).match(reg);
+			if (r != null)
+				return  unescape(r[2]);
+				
+			return null;
+		}
+        
+        var cat_id = GetQueryString("cat_id");
+        if (cat_id == null)
+            cat_id = "test";
+        var face_id = GetQueryString("face_id");
+        
+        if (face_id != null) {
+            $.get("../compare_face?face_id=" + face_id + "&cat_id=" + cat_id, function(result) {
+                if (result["code"] == 0) {
+                    var canvas = document.getElementById("myCanvas");
+                    var ctx = canvas.getContext("2d");
+                    var loadImage = function(img, i, top, right, bottom, left, x, y) {
+                        console.log("draw face(T R B L): " + top + ", " + right + ", " + bottom + ", " + left + ", x: " + x + ", y: " + y);
+                        ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
+                    }
+                    
+                    var x = 0;
+                    var y = 0;
+                    
+                    var match_faces = result["result"];
+                    for (var i=0;i<match_faces.length;i++){
+                        var face = match_faces[i];
+                        var image_url = face["path"];
+                        var small_image_url = face["small_path"];
+                        var id = face["id"];
+                        var top = face["top"];
+                        var right = face["right"];
+                        var bottom = face["bottom"];
+                        var left = face["left"];
+                        
+                        console.log("face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
+                        
+                        //var img = new Image()
+                        //img.onload = loadImage(img, i, top, right, bottom, left, x, y);
+                        //img.src = image_url;
+                        
+                        var img = document.createElement("img");
+                        img.src = small_image_url;
+                        img.height = 480;
+                        document.getElementById("container").appendChild(img);
+                        
+                        x += 96;
+                        if (x >= 96 * 8) {
+                            x = 0;
+                            y += 96;
+                        }
+                    }
+                }
+            });
+        }
+        else {
+            console.log("missing params");
+        }
+    </script>
+</body>
+</html>

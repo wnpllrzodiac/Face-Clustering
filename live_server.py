@@ -13,10 +13,20 @@ import pymysql
 import uuid
 import hashlib
 import time
+import numpy as np
 from imutils import build_montages
 
 def repaire_filename(filename):
     return filename.encode('ISO-8859-1').decode('utf-8', 'replace')
+    
+# simple log functions.
+def trace(msg):
+    date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print("[%s][trace] %s"%(date, msg))
+    
+def get_msec():
+    msec = int(time.time() * 1000)
+    return msec
 
 class ImgClusterServer:
     @cherrypy.expose
@@ -124,7 +134,7 @@ class ImgClusterServer:
         }
 
         # 打开数据库连接
-        db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+        db = pymysql.connect(config.mysql_server_ip, config.mysql_username, config.mysql_password, config.mysql_db_name)
         
         # 使用 cursor() 方法创建一个游标对象 cursor
         cursor = db.cursor()
@@ -134,7 +144,7 @@ class ImgClusterServer:
             values = cursor.fetchall()
             count = values[0][0]
         except Exception as e:
-            print('failed to get cluster count from db: ', e)
+            trace('failed to get cluster count from db: {}'.format(e))
             message['msg'] = e
 
         db.close()
@@ -165,7 +175,7 @@ class ImgClusterServer:
         }
 
         # 打开数据库连接
-        db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+        db = pymysql.connect(config.mysql_server_ip, config.mysql_username, config.mysql_password, config.mysql_db_name)
         
         # 使用 cursor() 方法创建一个游标对象 cursor
         cursor = db.cursor()
@@ -193,7 +203,7 @@ class ImgClusterServer:
                     'height': int(480 * height / width)
                 })
         except Exception as e:
-            print('failed to get cluster faces from db: ', e)
+            trace('failed to get cluster faces from db: {}'.format(e))
             message['msg'] = e
 
         db.close()
@@ -206,11 +216,130 @@ class ImgClusterServer:
             message['error']        = 'no cluster faces'
 
         return message
+    
+    def get_face_info(self, face_id, cat_id):
+        db = pymysql.connect(config.mysql_server_ip, config.mysql_username, config.mysql_password, config.mysql_db_name)
+        cursor = db.cursor()
+        
+        try:
+            # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
+            cursor.execute('SELECT clus_face_tb.id, img_idx, box_top, box_right, box_bottom, box_left, feature, img_path \
+                from clus_face_tb \
+                left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
+                WHERE clus_face_tb.id = %s and clus_face_tb.cat_id = "%s"' % (face_id, cat_id))
+            values = cursor.fetchall()
+
+            if len(values) > 0:
+                v = values[0]
+                #trace(values)
+                face_idx  = v[0]
+                img_idx   = v[1]
+                top, right, bottom, left = v[2:6]
+                feature   = np.frombuffer(v[6], dtype=np.float64)
+                img_path  = v[7]
+
+                #trace(feature)
+                box = (top, right, bottom, left)
+                return (img_path, box, feature)
+            else:
+                trace('NO face match')
+        except Exception as e:
+            trace('failed to read face data: {}'.format(e))
+        finally:
+            db.close()
+    
+        return None
+        
+    @cherrypy.expose
+    @cherrypy.tools.json_out()
+    def compare_face(self, face_id, cat_id='test'):
+        message = {
+            'code': -1,
+            'msg': 'error',
+            'face_id': face_id,
+            'cat_id': cat_id
+        }
+        
+        (path, box, unknown_face_encoding) = self.get_face_info(face_id, cat_id)
+        if path == None:
+            message['msg'] = 'failed to find face'
+            return message
+        
+        db = pymysql.connect(config.mysql_server_ip, config.mysql_username, config.mysql_password, config.mysql_db_name)
+        cursor = db.cursor()
+        
+        try:
+            # SELECT * from clus_face_tb left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx where clus_face_tb.cat_id = 'test';
+            cursor.execute('SELECT clus_face_tb.id, img_idx, box_top, box_right, box_bottom, box_left, feature, img_path from clus_face_tb \
+                left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx \
+                WHERE clus_face_tb.cat_id = %s', cat_id)
+            values = cursor.fetchall()
+            
+            data = []
+            for v in values:
+                #trace(values)
+                face_idx  = v[0]
+                img_idx   = v[1]
+                top, right, bottom, left = v[2:6]
+                feature   = np.frombuffer(v[6], dtype=np.float64)
+                img_path  = v[7]
+
+                #trace(feature)
+                box = (top, right, bottom, left)
+                d = [{"faceIndex": face_idx, "imageIndex": img_idx, "imagePath": img_path, "loc": box, "encoding": feature}]
+                data.extend(d)
+        except Exception as e:
+            trace('failed to read face data: {}'.format(e))
+            return message
+        finally:
+            db.close()
+
+        data = np.array(data)
+        known_faces = np.array([d["encoding"] for d in data])
+        #trace('known_faces count: {}'.format(len(known_faces)))
+
+        #结果是True/false的数组，未知面孔known_faces阵列中的任何人相匹配的结果
+        start_time = get_msec()
+        results = face_recognition.compare_faces(known_faces, unknown_face_encoding, tolerance=0.5)
+        compare_msec = get_msec() - start_time
+        #trace('compare time: {} msec'.format(compare_msec))
+        results = np.array(results)
+        found = np.where(results==True)[0]
+        faces = []
+        for i in found:
+            match_face_id = data[i]["faceIndex"]
+            imagepath = data[i]["imagePath"]
+            (top, right, bottom, left) = data[i]["loc"]
+            #trace('#{}: {}'.format(i, imagepath))
+            
+            f = imagepath.split('/')[-1]
+            download_url = 'http://%s:%d/img/%s/%s' % (config.image_server_ip, config.image_server_port, cat_id, f)
+            small_url = 'http://%s:%d/imgr/%s/%s?h=480' % (config.image_server_ip, config.image_server_port, cat_id, f)
+            
+            faces.append({
+                'id': match_face_id,
+                'path': download_url,
+                'small_path': small_url,
+                'top': top, 
+                'right': right,
+                'bottom': bottom,
+                'left': left
+            })
+        
+        if len(faces) > 0:
+            message['code']         = 0
+            message['msg']          = 'o.k.'
+            message['result']       = faces
+        else:
+            message['error']        = 'no match face found'
+        
+        return message
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def get_pic_faces(self, img_id):
-        sql = 'SELECT clus_face_tb.id,img_path,clus_face_tb.box_top,clus_face_tb.box_right,clus_face_tb.box_bottom,clus_face_tb.box_left from clus_face_tb \
+        sql = 'SELECT clus_face_tb.id,img_path,clus_face_tb.box_top,clus_face_tb.box_right,clus_face_tb.box_bottom,clus_face_tb.box_left,clus_face_tb.cat_id \
+            from clus_face_tb \
             left join clus_img_tb on clus_img_tb.id = clus_face_tb.img_idx WHERE img_idx = %d' % (int(img_id))
         
         message = {
@@ -221,7 +350,7 @@ class ImgClusterServer:
         }
 
         # 打开数据库连接
-        db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+        db = pymysql.connect(config.mysql_server_ip, config.mysql_username, config.mysql_password, config.mysql_db_name)
         
         # 使用 cursor() 方法创建一个游标对象 cursor
         cursor = db.cursor()
@@ -232,28 +361,30 @@ class ImgClusterServer:
             cursor.execute(sql)
             values = cursor.fetchall()
 
-            if len(values):
+            if len(values) > 0:
                 path = values[0][1]
                 f = path.split('/')[-1]
-                download_url = 'http://%s:%d/img/%s' % (config.image_server_ip, config.image_server_port, f)
-                small_url = 'http://%s:%d/imgr/%s?h=480' % (config.image_server_ip, config.image_server_port, f)
+                cat_id = values[0][-1]
+                download_url = 'http://%s:%d/img/%s/%s' % (config.image_server_ip, config.image_server_port, cat_id, f)
+                small_url = 'http://%s:%d/imgr/%s/%s?h=480' % (config.image_server_ip, config.image_server_port, cat_id, f)
                 message['image'] = download_url
                 message['small_image'] = small_url
-            for v in values:
-                idx = v[0]
-                top, right, bottom, left = v[2:6]
-                faces.append({
-                    'id': idx,
-                    'top': top, 
-                    'right': right,
-                    'bottom': bottom,
-                    'left': left
-                })
+                
+                for v in values:
+                    idx = v[0]
+                    top, right, bottom, left = v[2:6]
+                    faces.append({
+                        'id': idx,
+                        'top': top, 
+                        'right': right,
+                        'bottom': bottom,
+                        'left': left
+                    })
         except Exception as e:
-            print('failed to get pic faces from db: ', e)
+            trace('failed to get pic faces from db: {}'.format(e))
             message['msg'] = e
-
-        db.close()
+        finally:
+            db.close()
 
         if len(faces) > 0:
             message['code']         = 0
@@ -286,7 +417,7 @@ class ImgClusterServer:
                 % (int(cluster_idx), cat_id)
 
         # 打开数据库连接
-        db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+        db = pymysql.connect(config.mysql_server_ip, config.mysql_username, config.mysql_password, config.mysql_db_name)
         
         # 使用 cursor() 方法创建一个游标对象 cursor
         cursor = db.cursor()
@@ -314,7 +445,7 @@ class ImgClusterServer:
             montage = build_montages(faces, (96,96), (5,5))[0]
             cv2.imwrite('/tmp/{}'.format(pic_name), montage)
         except Exception as e:
-            print('failed to get cluster faces from db: ', e)
+            trace('failed to get cluster faces from db: {}'.format(e))
 
         db.close()
 
@@ -337,7 +468,7 @@ class ImgClusterServer:
         }
 
         # 打开数据库连接
-        db = pymysql.connect("192.168.23.71","root","tysxwg07","test")
+        db = pymysql.connect(config.mysql_server_ip,config.mysql_username,config.mysql_password, config.mysql_db_name)
         
         # 使用 cursor() 方法创建一个游标对象 cursor
         cursor = db.cursor()
@@ -361,7 +492,7 @@ class ImgClusterServer:
             else:
                 message['msg']  = 'no such pic'
         except Exception as e:
-            print('failed to query pic from db: ', e)
+            trace('failed to query pic from db: ', e)
             message['msg'] = e
 
         db.close()
@@ -385,7 +516,7 @@ class ImgClusterServer:
         }
 
         # 打开数据库连接
-        db = pymysql.connect("192.168.23.71","root","tysxwg07","test")
+        db = pymysql.connect(config.mysql_server_ip,config.mysql_username,config.mysql_password, config.mysql_db_name)
         
         # 使用 cursor() 方法创建一个游标对象 cursor
         cursor = db.cursor()
@@ -406,7 +537,7 @@ class ImgClusterServer:
                     'height': int(480 * height / width)
                 })
         except Exception as e:
-            print('failed to query pic from db: ', e)
+            trace('failed to query pic from db: {}'.format(e))
             message['msg'] = e
 
         db.close()
@@ -432,13 +563,13 @@ class ImgClusterServer:
         }
         
         try:
-            db = pymysql.connect("192.168.23.71","root","tysxwg07","test" )
+            db = pymysql.connect(config.mysql_server_ip, config.mysql_username, config.mysql_password, config.mysql_db_name)
             cursor = db.cursor()
             cursor.execute('truncate table clus_img_tb')
             cursor.execute('truncate table clus_face_tb')
             cursor.execute('truncate table clus_cluster_tb')
         except Exception as e:
-            print('failed to clean db: ', e)
+            trace('failed to clean db: {}'.format(e))
             message['code'] = -1
             message['msg'] = e
             

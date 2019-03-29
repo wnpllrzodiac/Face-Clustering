@@ -21,6 +21,7 @@ setsid nohup python3 -u live_server.py >server.log &
 nohup python3 -u clus_face.py >clus_face.py.log &
 
 http://192.168.23.71:9123/static/allperson.html?cat_id=fn
+http://192.168.23.71:9123/static/avator.html?img_id=4783&cat_id=xgyy
 
 ====== nginx build =========
 ./configure --prefix=/data/michael/git/srs/trunk/objs/nginx-1.5.7/_release --with-http_image_filter_module --with-http_ssl_module --add-module=/data/michael/git/nginx-ts-module --add-module=/data/michael/git/nginx-tsenc-module --add-module=/data/michael/git/ngx_devel_kit-0.3.1rc1 --add-module=/data/michael/git/form-input-nginx-module-0.12 --add-module=/data/michael/git/nginx-http-flv-module --add-module=/data/michael/git/ngx_cache_purge-2.3 --add-module=/data/michael/git/nginx-vod-module --with-http_stub_status_module --with-file-aio --with-cc-opt="-I/data/michael/git/srs_build/trunk/objs/ffmpeg/include" --with-ld-opt="-L/data/michael/git/srs_build/trunk/objs/ffmpeg/lib -lm -lpthread -lrt -lavfilter -lavformat -lswscale -lavcodec -lavutil -lswresample -lpostproc -ljpeg -lzmq -lx264 -lx265 -lwebp -lspeex -lmp3lame -lfreetype -lfdk-aac -lz -ldl -lstdc++"

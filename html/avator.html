@@ -22,10 +22,14 @@
 			return null;
 		}
         
+        var cat_id = GetQueryString("cat_id");
+        if (cat_id == null)
+            cat_id = "test";
+        
         var img_id = GetQueryString("img_id");
         if (img_id != null) {
-            document.getElementById("prev_page").href = "avator.html?img_id=" + (parseInt(img_id) - 1);
-            document.getElementById("next_page").href = "avator.html?img_id=" + (parseInt(img_id) + 1);
+            document.getElementById("prev_page").href = "avator.html?img_id=" + (parseInt(img_id) - 1) + "&cat_id=" + cat_id;
+            document.getElementById("next_page").href = "avator.html?img_id=" + (parseInt(img_id) + 1) + "&cat_id=" + cat_id;
             
             $.get("../get_pic?img_id=" + img_id, function(result) {
                 var image_url = result["image"];
@@ -42,11 +46,15 @@
                     ctx.font = "24px Arial";
                     ctx.fillStyle = "red"; 
                     
+                    var face_count = 0;
+                    var faceid_arr = new Array();
+                    
                     $.get("../get_pic_faces?img_id=" + img_id, function(result) {
                         if (result["code"] == 0) {
                             var faces = result["result"];
                             var x = 0;
                             var y = 0;
+                            face_count = faces.length;
                             for (var i=0;i<faces.length;i++){
                                 var face = faces[i];
                                 var id = face["id"];
@@ -55,6 +63,8 @@
                                 var bottom = face["bottom"];
                                 var left = face["left"];
 
+                                faceid_arr.push(id);
+                                
                                 console.log("face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
                                 ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
                                 ctx.fillText(""+id,x,y + 20);
@@ -67,6 +77,24 @@
                         }
                         else {
                             console.log("no face found");
+                        }
+                    });
+                    
+                    canvas.addEventListener('click',function(event) {
+                        var x = event.pageX - canvas.getBoundingClientRect().left;
+                        var y = event.pageY - canvas.getBoundingClientRect().top;
+                        console.log("x: " + x + ", y: " + y);
+                        if (x < 96 * 8 && y < 96 * 8) {
+                            var index = Math.floor(x / 96) + Math.floor(y / 96) * 8;
+                            console.log("index: " + index);
+                            
+                            if (index < face_count)
+                                window.location.href="compare.html?face_id=" + faceid_arr[index] + "&cat_id=" + cat_id;
+                            else
+                                console.log("invalid index");
+                        }
+                        else {
+                            console.log("out of box");
                         }
                     });
                 }

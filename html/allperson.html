@@ -5,7 +5,8 @@
 </head>
 <body>
     <div id="container"></div>
-    <canvas id="myCanvas" width="800" height="800" style="border:3px solid #d3d3d3;">您的浏览器不支持 HTML5 canvas 标签</canvas>
+    <canvas id="myCanvas" width="800" height="0" style="border:3px solid #d3d3d3;">您的浏览器不支持 HTML5 canvas 标签</canvas>
+    <div id="container2" width="800" height="800"></div>
     <script src="js/jquery.js"></script>
     <script>
         function GetQueryString(name)
@@ -47,6 +48,11 @@
                     }
                 });
                 
+                var loadImage = function(img, top, right, bottom, left, x, y) {
+                    console.log("draw face(T R B L): " + top + ", " + right + ", " + bottom + ", " + left + ", x: " + x + ", y: " + y);
+                    ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
+                }
+                
                 $.ajaxSettings.async = false;
                 var x = 0;
                 var y = 0;
@@ -64,15 +70,27 @@
                                 
                                 console.log("cluster_face #" + i + ": " + image_url + " , face info(T R B L): " + top + ", " + right + ", " + bottom + ", " + left);
                                 
-                                var img = new Image()
-                                img.src = image_url;
-                                img.onload = function() {
-                                    ctx.drawImage(img, left, top, right-left, bottom-top, x, y, 96, 96);
-                                    x += 96;
-                                    if (x >= 96 * 8) {
-                                        x = 0;
-                                        y += 96;
-                                    }
+                                //var img = new Image()
+                                //img.onload = loadImage(img, left, top, right-left, bottom-top, x, y);
+                                //img.src = image_url;
+                                
+                                // http://192.168.23.71:9124/img/fn/bc79823d82e68ae2ee20ef92175d252c.jpg
+                                // http://192.168.23.71:9233/img/fn/bc79823d82e68ae2ee20ef92175d252c.jpg?s=thumb&a=500x300%2B50%2B120
+                                // a=500x300+50+120
+                                var w = right - left;
+                                var h = bottom - top;
+                                var thumb = document.createElement("img");
+                                var thumb_url = image_url.replace(":9124", ":9233") + "?s=thumb&a=" + encodeURIComponent("" + w + "x" + h + "+" + left + "+" + top);
+                                thumb.src = thumb_url;
+                                thumb.width = thumb.height = 96;
+                                document.getElementById("container2").appendChild(thumb);
+                                
+                                x += 96;
+                                if (x >= 96 * 8) {
+                                    var br = document.createElement("br");
+                                    document.getElementById("container2").appendChild(br);
+                                    x = 0;
+                                    y += 96;
                                 }
                             }
                             else {

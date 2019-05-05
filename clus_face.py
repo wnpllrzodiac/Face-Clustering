@@ -24,19 +24,7 @@ def trace(msg):
     date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print("[%s][trace] %s"%(date, msg))
 
-def process_images_in_process_pool(cat_id, images, number_of_cpus):
-    if number_of_cpus == -1:
-        processes = None
-    else:
-        processes = number_of_cpus
-
-    # macOS will crash due to a bug in libdispatch if you don't use 'forkserver'
-    context = multiprocessing
-    if "forkserver" in multiprocessing.get_all_start_methods():
-        context = multiprocessing.get_context("forkserver")
-
-    pool = context.Pool(processes=processes)
-
+def process_images_in_process_pool(pool, cat_id, images):
     function_parameters = zip(
         itertools.repeat(cat_id),
         images
@@ -286,6 +274,14 @@ def get_msec():
 if __name__ == '__main__':
     trace('clus face work started...')
     
+    # macOS will crash due to a bug in libdispatch if you don't use 'forkserver'
+    processes = 8
+    context = multiprocessing
+    if "forkserver" in multiprocessing.get_all_start_methods():
+        context = multiprocessing.get_context("forkserver")
+
+    pool = context.Pool(processes=processes)
+    
     total_cluster_msec = 0
     while True:
         trace('ready to scan pic')
@@ -313,7 +309,7 @@ if __name__ == '__main__':
                             trace('failed to move file: {}'.format(e))
 
                     if len(images) > 0:
-                        process_images_in_process_pool(cat_id, images, 8)
+                        process_images_in_process_pool(pool, cat_id, images)
                         cluster_face = True
                 else:
                     for file in os.listdir(os.path.join(config.upload_folder, folder)):
@@ -345,6 +341,10 @@ if __name__ == '__main__':
         sleep_sec = 30 - used_time
         if sleep_sec > 3:
             time.sleep(sleep_sec)
+    
+    p.close()
+    p.join()
+    print('All processes done!')
     
     trace('clus face work exited')
 
